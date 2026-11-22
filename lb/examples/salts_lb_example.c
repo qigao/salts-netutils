@@ -1,6 +1,6 @@
 #include "salts_lb.h"
 
-#include <salts/error_codes.h>
+#include <core/error_codes.h>
 
 #include <signal.h>
 #include <stdint.h>

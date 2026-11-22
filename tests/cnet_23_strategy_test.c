@@ -4,7 +4,7 @@
 #include <cnet/owner_placement.h>
 #include <cnet/recovery_policy.h>
 #include <cnet/sg_host.h>
-#include <salts/error_codes.h>
+#include <core/error_codes.h>
 
 #include <stdint.h>
 #include <stdio.h>

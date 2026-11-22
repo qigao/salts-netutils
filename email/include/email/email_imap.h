@@ -15,9 +15,9 @@
 #ifndef EMAIL_IMAP_H
 #define EMAIL_IMAP_H
 
-#include "platform.h"
+#include <core/platform.h>
 #include "email_message.h"
-#include "tstr.h"
+#include <core/tstr.h>
 #include <stddef.h>
 
 #ifdef __cplusplus
@@ -64,9 +64,10 @@ typedef struct imap_client_s imap_client_t;
 
 /**
  * Create a synchronous IMAP client with copied configuration strings.
+ * The first connection initializes CNet on the calling progress thread.
  *
  * @param config Required host, port, TLS mode, credentials, and timeout policy.
- * @return Owned client, or NULL for invalid configuration or allocation/runtime failure.
+ * @return Owned client, or NULL for invalid configuration or allocation failure.
  */
 imap_client_t *imap_client_create(const imap_config_t *config);
 

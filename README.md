@@ -318,9 +318,9 @@ individual RTT percentiles. Admission throughput, TLS, saturated queues,
 allocation/RSS, P95/P99 and cross-platform results still need separate workloads
 and measurement before broader performance claims.
 
-## Build and test
+## Earlier SDK qualification
 
-The native build and packaging qualification declare floating **prerelease**
+Earlier native build and packaging qualification used floating **prerelease**
 ranges using `Salts.Native Version="2.3.0-*"` and
 `SaltsUtils.Native Version="4.3.0-*"`. Because the NuGet feed also contains
 SHA-qualified Linux-only verification snapshots (which can sort *above*
@@ -511,97 +511,69 @@ including the migrated `stun_discovery`. Reproduce with the configured SDK roots
 `ctest --preset ci-win-release-user`, `cmake --build --preset install-ci-win-release-user`,
 then `pwsh -File cmake/ci/verify-installed-sdk.ps1` from the MSVC environment.
 
-The versioned `CMakeUserPresets.json` owns local and CI entry points. Shared
-presets retain compiler and platform settings. Following
-[SaltsUtils 4.3 prerelease](https://github.com/qigao/salts-utils/releases/tag/v4.3.0-rc.2), vcpkg runs in manifest mode
-through the shared `qigao/vcpkg-cache` toolchain, with a read-only GitHub feed
-and a writable local cache. The existing vcpkg baseline is retained. SaltsNet
-uses the [GmSSL-backed crypto provider in Salts](https://github.com/qigao/salts)
-through its public CMeta APIs; it has no direct OpenSSL/BoringSSL dependency.
-Runtime libraries are resolved through the selected preset's environment.
+## Build with the split SDKs
 
-Prerequisites: PowerShell 7, .NET SDK 8, CMake 3.25 or newer, Ninja, a C/C++ toolchain, vcpkg,
-and the [shared cache checkout](https://github.com/qigao/vcpkg-cache).
-Set `PROJECT_ROOT` (the parent of `external/pkgs`), `VCPKG_ROOT`, and
-`GITHUB_TOKEN` with `read:packages`. Windows uses the shared cache at
-`%LOCALAPPDATA%/qigao/vcpkg-cache`; Linux reads `VCPKG_CACHE_REPOSITORY_ROOT`
-from the environment and requires Mono for the NuGet binary cache client.
+Use [`.env.example`](.env.example) to select vcpkg-cache 0.1.8, SaltsBase
+0.1.10, CMeta 0.1.10, SaltsCNet 0.1.18 with the SNMPv3 crypto extensions,
+and SaltsUtils 0.1.8. These versions share the same Base SDK. The published
+SaltsCNet 0.1.18 release predates the SNMPv3 extensions. Build and install
+SaltsCNet with the extension patch, then set `SALTS_CNET_ROOT` to that install
+prefix. Its CMake package exposes `SaltsCNet_LEGACY_SNMP_CRYPTO`.
 
-Windows Release example, from PowerShell in an x64 `VsDevCmd.bat` environment:
+The `native-release-user` preset uses LLVM-MinGW and the preinstalled
+`qigao-x64-windows-llvm-mingw` payload. The `msvc-release-user` preset uses
+MSVC and the `x64-windows` payload in an x64 `VsDevCmd.bat` environment.
+Select matching SDK roots in `.env` for each compiler. `RE2C_ROOT` points
+to the host tools directory containing `bin/re2c.exe` on Windows. CMake
+3.27 or newer reads the dependency paths from the parent environment.
 
-```powershell
-./cmake/ci/restore-native-sdk.ps1 -SaltsRid windows-x64 -HostRid windows-x64 -Local
-cmake --preset win-release-user
-cmake --build --preset win-release-user --parallel
-ctest --preset win-release-user
-```
-
-The restore command obtains `Qigao.Re2c.Binary` from the GitHub Packages feed
-in [cmake/vcpkg-cache.nuget.config](cmake/vcpkg-cache.nuget.config), also using
-`Version="*"`. It sets `SALTS_ROOT`, `SALTS_UTILS_ROOT`, their resolved versions and host
-SDK roots, plus `RE2C_ROOT` and `RE2C_VERSION`, in the current
-PowerShell session. `RE2C_ROOT` selects `tools/<host RID>` from the restored
-package, including when cross-compiling Android. CMake resolves re2c only from
-that root, and lexer generation depends on that executable. The Docker build
-base does not install a distribution re2c; derived build environments must
-provide the restored package root as well.
-
-Linux uses the same script with `linux-x64` for both RIDs, then
-`linux-release-user` for configure, build, and test. Debug/ASan builds use
-`win-dev-user` or `linux-dev-user` and require a matching Debug Salts SDK supplied
-through `SALTS_ROOT` and `SALTS_UTILS_ROOT`; the prerelease Release SDKs
-are not Debug SDKs.
-
-Install SaltsNet:
+Load `.env` from PowerShell and run the LLVM-MinGW presets:
 
 ```powershell
-cmake --build --preset install-win-release-user --parallel
+Get-Content -LiteralPath .env | ForEach-Object {
+  if ($_ -match '^([A-Za-z_][A-Za-z0-9_]*)=(.*)$') {
+    [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process')
+  }
+}
+cmake --fresh --preset native-release-user
+cmake --build --preset native-release-user
+ctest --preset native-release-user
+cmake --build --preset install-native-release-user
 ```
 
-CI uses `ci-linux-release-user`, `ci-macos-release-user`, and
-`ci-win-release-user`. Each inherits the corresponding shared compiler profile:
-GCC on Linux, Homebrew GCC 15 on macOS, and MSVC with UTF-8 on Windows.
-The vcpkg setup action uses the same pinned tool bootstrap as current Salts and
-SaltsUtils; native package restoration re-evaluates the two official release channels
-(RC or stable) on every run. CI uses platform-separated ccache objects (including
-MSVC), read-only shared vcpkg binary caching, and cached NuGet package payloads.
-Android arm64 uses `ci-android-sdk-release-user` after building host
-tools. Its `LEMON_EXECUTABLE` must point to that completed host build; the
-target toolchain never produces or searches for an executable to run on the host.
-The iOS device build uses `ci-ios-sdk-release-user` after the macOS host
-build. Native Linux arm64 executes `ci-linux-arm64-release-user` and host
-CTest on an ARM64 runner. Both Salts 2.3 and SaltsUtils 4.3 published
-prereleases ship `linux-arm64`, but **not** `ios-simulator-arm64`; the
-six-RID matrix follows the actual published SDK set. Host jobs execute
-CTest; Android and iOS are compiled and linked only. SDK staging remains
-`stage/sdk/<RID>`, and master releases retain CI-owned immutable tags and package publication.
+The native build uses the shared SDKs in place. `install-native-release-user`
+writes to `build/native-release-user/stage`. The existing GitHub Actions
+restore job still targets the earlier NuGet SDKs. Release CI needs the
+SaltsCNet extension published for its target profiles and a matching restore
+configuration.
 
 `BUILD_TESTING` controls all test targets, and `BUILD_EXAMPLES` controls all
 examples, including the email clients. Email and MIME test directories own their
 explicit test target names and sources. The old package consumer harness and
 the old unused benchmark switch were removed during migration; the current
 `BUILD_BENCHMARKS` option now controls the SG benchmark above. SDK installation
-is a normal build/install step. The current formal installed consumers live in
-`tests/installed_sdk`: CI installs into `stage/sdk/<RID>`, then
-`cmake/ci/verify-installed-sdk.ps1` uses their versioned user presets and empty
-vcpkg manifest to configure/build/run C11 and C++17 tests in a separate tree.
-It inherits the shared cache toolchain and package roots; it imports SaltsNet
-strictly from that fresh install, without source-tree targets or build-tree DLLs.
+is a normal build/install step. The C11 and C++17 consumers in
+`tests/installed_sdk` use `SALTSNET_ROOT` to import the staged package in a
+separate build tree.
 
-The prerequisite bump changes build inputs and orchestration. The native SG
-proxy and LB integrations above add opt-in public APIs; further CNet 2.3
-integration in other protocol consumers remains a separate milestone.
-Reconfigure and rebuild consumers together with the selected SDK to avoid
-mixing headers and runtime versions. Local restoration stays under ignored
-`stage/nuget` and does not overwrite installed SDKs. To undo the build migration,
-revert its configuration changes and rebuild with the previous matching SDK;
-automatic fallback to an older package is intentionally unsupported.
+```powershell
+pwsh -File cmake/ci/verify-installed-sdk.ps1 -Preset native-release-user `
+  -SaltsNetRoot build/native-release-user/stage -TargetTriplet qigao-x64-windows-llvm-mingw
+```
+
+The dependency change moves low-level ASN.1, platform and crypto calls to the
+published split interfaces. The project retains its `SaltsNet::` CMake target
+names and C entry points. Rebuild clients together with the selected SDKs
+because public headers and binary imports use the split providers. To roll
+back, rebuild the previous SaltsNet revision against its matching SDKs.
 
 Android device testing and LLDB notes are documented in [tools/android-test.md](tools/android-test.md).
 
 ## Using SaltsNet from CMake
 
-SaltsNet's package config resolves the installed Salts SDK from `SALTS_ROOT`. Consumers link only the component targets they use; Salts dependencies propagate through those CMake targets.
+SaltsNet's package config reads `SALTS_BASE_ROOT`, `CMETA_ROOT`,
+`SALTS_CNET_ROOT` and `SALTS_UTILS_ROOT` from the same loaded environment.
+Consumers link the SaltsNet component targets they use.
 
 ```cmake
 find_package(SaltsNet CONFIG REQUIRED)
@@ -612,10 +584,10 @@ target_link_libraries(net_tool PRIVATE
   SaltsNet::SNMP)
 ```
 
-When configuring a consumer, add the SaltsNet install prefix to `CMAKE_PREFIX_PATH` and keep `SALTS_ROOT` pointed at the matching Salts profile.
+When configuring a consumer, add the SaltsNet install prefix to
+`CMAKE_PREFIX_PATH` and keep the SDK paths loaded for the matching compiler.
 
 ```powershell
-$env:SALTS_ROOT = 'C:/projects/cpp/external/pkgs/salts/release'
 cmake -S . -B build `
   -DCMAKE_PREFIX_PATH='C:/projects/cpp/external/pkgs/saltsnet/release'
 cmake --build build

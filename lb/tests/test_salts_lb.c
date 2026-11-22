@@ -17,9 +17,9 @@ typedef int lb_test_socket_t;
 #include "salts_lb_sg.h"
 #include "tinytest.h"
 
-#include <salts/clock.h>
-#include <salts/error_codes.h>
-#include <salts/thread.h>
+#include <core/clock.h>
+#include <core/error_codes.h>
+#include <threads/threads.h>
 
 #include <stdatomic.h>
 #include <stdint.h>
@@ -126,7 +126,7 @@ static void lb_test_peer_run(void *user) {
           goto done;
         }
         offset += fragment_size;
-        if (offset < group_size + 1u) cmeta_sleep_ms(10u);
+        if (offset < group_size + 1u) sleep_ms(10u);
       }
     }
     const int exchange_count = peer->exchange_count > 0 ? peer->exchange_count : 1;
@@ -147,7 +147,7 @@ static void lb_test_peer_run(void *user) {
           }
           if (lb_test_send_all(socket_value, input + offset, fragment_size) != 0) goto done;
           offset += fragment_size;
-          if (offset < (size_t)received) cmeta_sleep_ms(10u);
+          if (offset < (size_t)received) sleep_ms(10u);
         }
       }
     }
@@ -175,8 +175,8 @@ done:
 }
 
 static int lb_test_poll_until(salts_lb_t *lb, lb_test_peer_t *worker, lb_test_peer_t *client) {
-  const uint64_t deadline = cmeta_monotonic_ms() + LB_TEST_TIMEOUT_MS;
-  while (cmeta_monotonic_ms() < deadline) {
+  const uint64_t deadline = monotonic_ms() + LB_TEST_TIMEOUT_MS;
+  while (monotonic_ms() < deadline) {
     size_t events = 0u;
     if (salts_lb_poll(lb, 10u, &events) != SALTS_OK) return -1;
     if ((!worker || atomic_load_explicit(&worker->done, memory_order_acquire)) &&
@@ -213,8 +213,8 @@ static ptrdiff_t lb_test_tlv_frame(const void *data, size_t size, void *user) {
 static void lb_test_run_pair_with_owner(salts_lb_config_t *config, lb_test_peer_t *worker,
                                         lb_test_peer_t *client, salts_lb_t **owner) {
   salts_lb_t *lb = salts_lb_create(config);
-  cmeta_thread_t worker_thread = NULL;
-  cmeta_thread_t client_thread = NULL;
+  sync_thread_t worker_thread = NULL;
+  sync_thread_t client_thread = NULL;
   uint16_t frontend_port = 0u;
   uint16_t worker_port = 0u;
 
@@ -228,13 +228,13 @@ static void lb_test_run_pair_with_owner(salts_lb_config_t *config, lb_test_peer_
   client->port = frontend_port;
   atomic_init(&worker->done, 0);
   atomic_init(&client->done, 0);
-  check_equal(cmeta_thread_create(&worker_thread, lb_test_peer_run, worker), SALTS_OK);
-  check_equal(cmeta_thread_create(&client_thread, lb_test_peer_run, client), SALTS_OK);
+  check_equal(sync_thread_create(&worker_thread, lb_test_peer_run, worker), SALTS_OK);
+  check_equal(sync_thread_create(&client_thread, lb_test_peer_run, client), SALTS_OK);
   check_equal(lb_test_poll_until(lb, worker, client), 0);
-  check_equal(cmeta_thread_join(&worker_thread), SALTS_OK);
-  check_equal(cmeta_thread_join(&client_thread), SALTS_OK);
-  cmeta_thread_destroy(&worker_thread);
-  cmeta_thread_destroy(&client_thread);
+  check_equal(sync_thread_join(&worker_thread), SALTS_OK);
+  check_equal(sync_thread_join(&client_thread), SALTS_OK);
+  sync_thread_destroy(&worker_thread);
+  sync_thread_destroy(&client_thread);
   check_equal(worker->status, 0);
   check_equal(client->status, 0);
   check_equal(salts_lb_stop(lb), SALTS_OK);
@@ -292,7 +292,7 @@ static ptrdiff_t lb_test_reentrant_frame(const void *data, size_t size, void *us
 typedef struct lb_test_sg_fixture {
   salts_lb_sg_t *host;
   lb_test_peer_t workers[SALTS_LB_SG_MAX_OWNERS], clients[SALTS_LB_SG_MAX_OWNERS];
-  cmeta_thread_t worker_threads[SALTS_LB_SG_MAX_OWNERS], client_threads[SALTS_LB_SG_MAX_OWNERS];
+  sync_thread_t worker_threads[SALTS_LB_SG_MAX_OWNERS], client_threads[SALTS_LB_SG_MAX_OWNERS];
   lb_test_socket_t held[SALTS_LB_SG_MAX_OWNERS];
   size_t calls[SALTS_LB_SG_MAX_OWNERS][3];
   const void *owner_threads[SALTS_LB_SG_MAX_OWNERS];
@@ -307,8 +307,8 @@ static void lb_test_sg_record(lb_test_sg_fixture *f, size_t callback) {
   uint16_t port;
   salts_lb_sg_stats_t stats;
   if (owner >= f->owners) { atomic_fetch_add(&f->failures, 1); return; }
-  if (!f->owner_threads[owner]) f->owner_threads[owner] = cmeta_thread_current_token();
-  if (f->owner_threads[owner] != cmeta_thread_current_token() ||
+  if (!f->owner_threads[owner]) f->owner_threads[owner] = sync_thread_current_token();
+  if (f->owner_threads[owner] != sync_thread_current_token() ||
       salts_lb_sg_poll(f->host, 0u, &work) != SALTS_EBUSY ||
       salts_lb_sg_stop(f->host) != SALTS_EBUSY ||
       salts_lb_sg_destroy(f->host) != SALTS_EBUSY ||
@@ -365,12 +365,12 @@ static void lb_test_sg_cleanup(lb_test_sg_fixture *f) {
   }
   for (size_t i = 0u; i < SALTS_LB_SG_MAX_OWNERS; ++i) {
     if (f->worker_threads[i]) {
-      check_warn(cmeta_thread_join(&f->worker_threads[i]) == SALTS_OK);
-      cmeta_thread_destroy(&f->worker_threads[i]);
+      check_warn(sync_thread_join(&f->worker_threads[i]) == SALTS_OK);
+      sync_thread_destroy(&f->worker_threads[i]);
     }
     if (f->client_threads[i]) {
-      check_warn(cmeta_thread_join(&f->client_threads[i]) == SALTS_OK);
-      cmeta_thread_destroy(&f->client_threads[i]);
+      check_warn(sync_thread_join(&f->client_threads[i]) == SALTS_OK);
+      sync_thread_destroy(&f->client_threads[i]);
     }
   }
 }
@@ -423,10 +423,10 @@ static void lb_test_sg_roundtrips(lb_test_sg_fixture *f, size_t owners, salts_lb
     client->request = mode == SALTS_LB_MODE_REQUEST ? (const char *)request : "API:ping";
     client->request_size = mode == SALTS_LB_MODE_REQUEST ? sizeof(request) : 8u;
     client->expected_response_size = client->request_size;
-    check_equal(cmeta_thread_create(&f->worker_threads[i], lb_test_peer_run, worker), SALTS_OK);
-    check_equal(cmeta_thread_create(&f->client_threads[i], lb_test_peer_run, client), SALTS_OK);
+    check_equal(sync_thread_create(&f->worker_threads[i], lb_test_peer_run, worker), SALTS_OK);
+    check_equal(sync_thread_create(&f->client_threads[i], lb_test_peer_run, client), SALTS_OK);
   }
-  start = cmeta_monotonic_ms();
+  start = monotonic_ms();
   for (;;) {
     bool done = true;
     size_t work;
@@ -435,7 +435,7 @@ static void lb_test_sg_roundtrips(lb_test_sg_fixture *f, size_t owners, salts_lb
       if (!atomic_load_explicit(&f->workers[i].done, memory_order_acquire) ||
           !atomic_load_explicit(&f->clients[i].done, memory_order_acquire)) done = false;
     if (done) break;
-    check(cmeta_monotonic_ms() - start < LB_TEST_TIMEOUT_MS);
+    check(monotonic_ms() - start < LB_TEST_TIMEOUT_MS);
   }
   for (size_t i = 0u; i < owners; ++i) {
     check_equal(f->workers[i].status, 0);
@@ -467,7 +467,7 @@ static void lb_test_sg_roundtrips(lb_test_sg_fixture *f, size_t owners, salts_lb
 
 static int lb_test_sg_wait(lb_test_sg_fixture *f, uint64_t placements,
                          uint64_t workers, salts_lb_sg_stats_t *stats) {
-  uint64_t start = cmeta_monotonic_ms();
+  uint64_t start = monotonic_ms();
   int first = SALTS_OK;
   for (;;) {
     uint64_t total_workers = 0u;
@@ -478,7 +478,7 @@ static int lb_test_sg_wait(lb_test_sg_fixture *f, uint64_t placements,
     check_equal(salts_lb_sg_get_stats(f->host, stats), SALTS_OK);
     for (size_t i = 0u; i < f->owners; ++i) total_workers += stats->owners[i].worker_admissions;
     if (stats->placement_calls >= placements && total_workers >= workers) return first;
-    check(cmeta_monotonic_ms() - start < LB_TEST_TIMEOUT_MS);
+    check(monotonic_ms() - start < LB_TEST_TIMEOUT_MS);
   }
 }
 
@@ -500,12 +500,12 @@ static void lb_test_sg_pinned_full(lb_test_sg_fixture *f, cnet_owner_placement_k
   check_equal(stats.owners[1].reserved + stats.owners[1].queued + stats.owners[1].taken, 2u);
   lb_test_close(f->held[1]);
   f->held[1] = LB_TEST_INVALID_SOCKET;
-  start = cmeta_monotonic_ms();
+  start = monotonic_ms();
   do {
     size_t work;
     check_equal(salts_lb_sg_poll(f->host, 1u, &work), SALTS_OK);
     check_equal(salts_lb_sg_get_stats(f->host, &stats), SALTS_OK);
-    check(cmeta_monotonic_ms() - start < LB_TEST_TIMEOUT_MS);
+    check(monotonic_ms() - start < LB_TEST_TIMEOUT_MS);
   } while (stats.owners[1].reserved + stats.owners[1].queued + stats.owners[1].taken != 1u);
   f->held[3] = lb_test_connect(f->frontend_port);
   check(f->held[3] != LB_TEST_INVALID_SOCKET);
@@ -543,8 +543,8 @@ static void lb_test_sg_mixed_failure(lb_test_sg_fixture *f) {
   f->workers[0].is_worker = 1;
   f->workers[0].port = f->worker_ports[0];
   f->clients[0].port = f->frontend_port;
-  check_equal(cmeta_thread_create(&f->worker_threads[0], lb_test_sg_disconnect_peer, &f->workers[0]), SALTS_OK);
-  check_equal(cmeta_thread_create(&f->client_threads[0], lb_test_sg_disconnect_peer, &f->clients[0]), SALTS_OK);
+  check_equal(sync_thread_create(&f->worker_threads[0], lb_test_sg_disconnect_peer, &f->workers[0]), SALTS_OK);
+  check_equal(sync_thread_create(&f->client_threads[0], lb_test_sg_disconnect_peer, &f->clients[0]), SALTS_OK);
   check_equal(lb_test_sg_wait(f, 1u, 2u, &stats), SALTS_OK);
 
   f->workers[1].is_worker = 1;
@@ -553,9 +553,9 @@ static void lb_test_sg_mixed_failure(lb_test_sg_fixture *f) {
   f->clients[1].port = f->frontend_port;
   f->clients[1].request = "API:healthy";
   f->clients[1].expected_response_size = 11u;
-  check_equal(cmeta_thread_create(&f->worker_threads[1], lb_test_peer_run, &f->workers[1]), SALTS_OK);
-  check_equal(cmeta_thread_create(&f->client_threads[1], lb_test_peer_run, &f->clients[1]), SALTS_OK);
-  start = cmeta_monotonic_ms();
+  check_equal(sync_thread_create(&f->worker_threads[1], lb_test_peer_run, &f->workers[1]), SALTS_OK);
+  check_equal(sync_thread_create(&f->client_threads[1], lb_test_peer_run, &f->clients[1]), SALTS_OK);
+  start = monotonic_ms();
   for (;;) {
     bool done = true;
     size_t work;
@@ -566,7 +566,7 @@ static void lb_test_sg_mixed_failure(lb_test_sg_fixture *f) {
           !atomic_load_explicit(&f->clients[i].done, memory_order_acquire)) done = false;
     if (done && stats.owners[1].drained &&
         stats.owners[0].reserved + stats.owners[0].queued + stats.owners[0].taken == 1u) break;
-    check(cmeta_monotonic_ms() - start < LB_TEST_TIMEOUT_MS);
+    check(monotonic_ms() - start < LB_TEST_TIMEOUT_MS);
   }
   for (size_t i = 0u; i < 2u; ++i) {
     check_equal(f->workers[i].status, 0);
@@ -764,7 +764,7 @@ spec("Salts CNet load balancer") {
     it("rejects filtered sessions without consuming a worker") {
       salts_lb_config_t config = salts_lb_config_default();
       salts_lb_t *lb;
-      cmeta_thread_t client_thread = NULL;
+      sync_thread_t client_thread = NULL;
       lb_test_peer_t client = {.request = "BLOCK:payload", .expected_response_size = 7u};
       uint16_t port = 0u;
       config.filter = lb_test_filter;
@@ -774,10 +774,10 @@ spec("Salts CNet load balancer") {
       check_equal(salts_lb_frontend_port(lb, &port), SALTS_OK);
       client.port = port;
       atomic_init(&client.done, 0);
-      check_equal(cmeta_thread_create(&client_thread, lb_test_peer_run, &client), SALTS_OK);
+      check_equal(sync_thread_create(&client_thread, lb_test_peer_run, &client), SALTS_OK);
       check_equal(lb_test_poll_until(lb, NULL, &client), 0);
-      check_equal(cmeta_thread_join(&client_thread), SALTS_OK);
-      cmeta_thread_destroy(&client_thread);
+      check_equal(sync_thread_join(&client_thread), SALTS_OK);
+      sync_thread_destroy(&client_thread);
       check_equal(client.status, 0);
       check_equal(client.response_size, 7u);
       check(memcmp(client.response, "BLOCKED", 7u) == 0);

@@ -6,10 +6,10 @@
 #ifndef MIME_UTILS_H
 #define MIME_UTILS_H
 
-#include "platform.h"
+#include <core/platform.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "cmeta_buffer.h"
+#include <memory/buffer.h>
 
 #ifdef __cplusplus
 extern "C" {

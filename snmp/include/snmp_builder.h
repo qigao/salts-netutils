@@ -8,7 +8,7 @@
 
 
 #include "snmp_api.h"
-#include "platform.h"
+#include <core/platform.h>
 #include "snmp_types.h"
 #include <stdint.h>
 #include <stddef.h>

@@ -1,7 +1,7 @@
 #ifndef LDAP_TYPES_H
 #define LDAP_TYPES_H
 
-#include "platform.h"
+#include <core/platform.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>

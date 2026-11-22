@@ -5,3 +5,4 @@ foreach(test_name IN ITEMS test_email_smtp test_email_pop3 test_email_cnet
     LIBS SaltsNet::Email Salts::TinyTest
     FOLDER email/test)
 endforeach()
+set_tests_properties(test_email_cnet PROPERTIES TIMEOUT 30)

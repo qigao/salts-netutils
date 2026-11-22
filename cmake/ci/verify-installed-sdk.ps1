@@ -1,47 +1,44 @@
+param(
+  [string]$SaltsNetRoot,
+  [string]$Preset,
+  [string]$TargetTriplet = $env:QIGAO_TARGET_TRIPLET
+)
+
 $ErrorActionPreference = 'Stop'
 
-foreach ($name in @('GITHUB_WORKSPACE', 'QIGAO_SDK_RID', 'QIGAO_TARGET_TRIPLET',
-                    'QIGAO_HOST_TRIPLET', 'SALTS_ROOT', 'SALTS_UTILS_ROOT',
-                    'VCPKG_ROOT', 'VCPKG_CACHE_REPOSITORY_ROOT', 'VCPKG_BINARY_SOURCES')) {
-  if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
-    throw "Installed SDK verification requires $name"
+if (-not $SaltsNetRoot) {
+  if (-not $env:GITHUB_WORKSPACE -or -not $env:QIGAO_SDK_RID) {
+    throw 'Specify -SaltsNetRoot or set GITHUB_WORKSPACE and QIGAO_SDK_RID'
   }
+  $SaltsNetRoot = Join-Path $env:GITHUB_WORKSPACE "stage/sdk/$env:QIGAO_SDK_RID"
 }
-$repositoryRoot = [IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
-$prefix = Join-Path $repositoryRoot "stage/sdk/$env:QIGAO_SDK_RID"
+$prefix = (Resolve-Path -LiteralPath $SaltsNetRoot).Path.Replace('\', '/')
 $config = Join-Path $prefix 'lib/cmake/SaltsNet/SaltsNetConfig.cmake'
 if (-not (Test-Path -LiteralPath $config -PathType Leaf)) {
   throw "Missing installed SaltsNet config: $config"
 }
-# The formal consumer has its own empty manifest/build tree. Only the shared
-# external toolchain and installed packages are inputs; no source-tree targets.
 $env:SALTSNET_ROOT = $prefix
-$triplet = $env:QIGAO_TARGET_TRIPLET
-$dependencies = Join-Path $repositoryRoot "vcpkg_installed/$triplet"
-$sourceDir = Join-Path $repositoryRoot 'tests/installed_sdk'
-# The optional resolved binary cache is only a runtime search location when
-# it actually exists; no project dependency shall be rebuilt as a fallback.
-
-# The package import is from the fresh install prefix. Runtime search never
-# relies on build/ci-sdk objects or a sibling SaltsNet source-tree target.
+$sourceDir = Join-Path $PSScriptRoot '../../tests/installed_sdk'
+$runtimeRoots = @($prefix)
+foreach ($name in @('SALTS_BASE_ROOT', 'CMETA_ROOT', 'SALTS_CNET_ROOT', 'SALTS_UTILS_ROOT')) {
+  $sdkRoot = [Environment]::GetEnvironmentVariable($name)
+  if ([string]::IsNullOrWhiteSpace($sdkRoot)) { throw "Installed SDK verification requires $name" }
+  $runtimeRoots += $sdkRoot
+}
+if ($env:VCPKG_INSTALLED_DIR -and $TargetTriplet) {
+  $runtimeRoots += Join-Path $env:VCPKG_INSTALLED_DIR $TargetTriplet
+}
 $separator = [string][IO.Path]::PathSeparator
-$runtimeDirs = @(
-  (Join-Path $prefix 'bin'),
-  (Join-Path $prefix 'lib'),
-  (Join-Path $env:SALTS_ROOT 'bin'),
-  (Join-Path $env:SALTS_ROOT 'lib'),
-  (Join-Path $env:SALTS_UTILS_ROOT 'bin'),
-  (Join-Path $env:SALTS_UTILS_ROOT 'lib'),
-  (Join-Path $dependencies 'bin'),
-  (Join-Path $dependencies 'lib')
-)
+$runtimeDirs = $runtimeRoots | ForEach-Object { Join-Path $_ 'bin'; Join-Path $_ 'lib' }
 $runtimePrefix = ($runtimeDirs | Where-Object { Test-Path -LiteralPath $_ -PathType Container }) -join $separator
 $env:PATH = "$runtimePrefix$separator$env:PATH"
 if (-not $IsWindows) {
   $env:LD_LIBRARY_PATH = "$runtimePrefix$separator$env:LD_LIBRARY_PATH"
   $env:DYLD_LIBRARY_PATH = "$runtimePrefix$separator$env:DYLD_LIBRARY_PATH"
 }
-$preset = if ($IsWindows) { 'win-release-user' } elseif ($IsMacOS) { 'macos-release-user' } else { 'linux-release-user' }
+if (-not $Preset) {
+  $Preset = if ($IsWindows) { 'win-release-user' } elseif ($IsMacOS) { 'macos-release-user' } else { 'linux-release-user' }
+}
 Push-Location $sourceDir
 try {
   & cmake --preset $preset

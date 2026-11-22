@@ -3,8 +3,8 @@
 #include "email/email_pop3.h"
 #include "email/email_smtp.h"
 #include "tinytest.h"
-#include <fmt.h>
-#include <salts/thread.h>
+#include <core/fmt.h>
+#include <threads/threads.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -180,7 +180,7 @@ static int wait_for_pop3_message(const smtp4dev_test_config_t *cfg, smtp4dev_res
       }
     }
 
-    cmeta_sleep_ms(200u);
+    sleep_ms(200u);
   }
 
   fail_result(result, "POP3 did not return the sent message");
@@ -252,7 +252,7 @@ static int wait_for_imap_message(const smtp4dev_test_config_t *cfg, smtp4dev_res
     }
 
     free(results);
-    cmeta_sleep_ms(200u);
+    sleep_ms(200u);
   }
 
   fail_result(result, "IMAP did not return the sent message");

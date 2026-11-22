@@ -5,7 +5,7 @@
 
 #include "email/email_smtp.h"
 #include "tinytest.h"
-#include <salts/error_codes.h>
+#include <core/error_codes.h>
 #include <string.h>
 
 spec("email_smtp") {

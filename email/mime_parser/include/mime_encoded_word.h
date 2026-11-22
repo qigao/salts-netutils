@@ -16,9 +16,9 @@
 #ifndef MIME_ENCODED_WORD_H
 #define MIME_ENCODED_WORD_H
 
-#include "platform.h"
+#include <core/platform.h>
 #include <stddef.h>
-#include "cmeta_buffer.h"
+#include <memory/buffer.h>
 
 #ifdef __cplusplus
 extern "C" {

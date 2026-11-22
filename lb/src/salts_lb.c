@@ -4,8 +4,8 @@
 #include <cnet/cnet.h>
 #include <cnet/destination_policy.h>
 #include <cnet/manager.h>
-#include <salts/error_codes.h>
-#include <cmeta_buffer.h>
+#include <core/error_codes.h>
+#include <memory/buffer.h>
 
 #include <limits.h>
 #include <stdlib.h>

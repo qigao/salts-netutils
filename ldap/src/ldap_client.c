@@ -8,9 +8,9 @@
 #include "ldap_parser.h"
 #include <cnet/cnet.h>
 #include <cnet/manager.h>
-#include <salts/clock.h>
-#include <salts/error_codes.h>
-#include <cmeta_buffer.h>
+#include <core/clock.h>
+#include <core/error_codes.h>
+#include <memory/buffer.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -399,7 +399,7 @@ static int ldap_client_drain_recv_buffer(ldap_client_t *client) {
 }
 
 static uint32_t ldap_client_remaining_ms(uint64_t deadline) {
-  const uint64_t now = cmeta_monotonic_ms();
+  const uint64_t now = monotonic_ms();
   const uint64_t remaining = deadline > now ? deadline - now : 0u;
   return remaining > UINT32_MAX ? UINT32_MAX : (uint32_t)remaining;
 }
@@ -486,7 +486,7 @@ static int ldap_client_send_and_wait(ldap_client_t *client, const uint8_t *data,
     ldap_client_set_transport_error(client, "send admission", status);
     return LDAP_CLIENT_ERROR_NETWORK;
   }
-  deadline = cmeta_monotonic_ms() + client->timeout_ms;
+  deadline = monotonic_ms() + client->timeout_ms;
   return ldap_client_recv_until_response(client, deadline);
 }
 
@@ -503,7 +503,7 @@ static int ldap_client_connect_impl(ldap_client_t *client) {
 
   /* A timed-out connect may still owe a real terminal. Finish that episode
    * before resetting callback storage or attempting another connection. */
-  deadline = cmeta_monotonic_ms() + client->timeout_ms;
+  deadline = monotonic_ms() + client->timeout_ms;
   status = ldap_client_collect(client);
   if (status == SALTS_OK && client->manager.impl) {
     status = cnet_close(&client->net, client->connection);
@@ -846,7 +846,7 @@ static int ldap_client_unbind_impl(ldap_client_t *client) {
     return LDAP_CLIENT_ERROR_NETWORK;
   }
 
-  deadline = cmeta_monotonic_ms() + client->timeout_ms;
+  deadline = monotonic_ms() + client->timeout_ms;
   while (!client->terminal) {
     const uint32_t wait_ms = ldap_client_remaining_ms(deadline);
     if (wait_ms == 0u) {

@@ -3,7 +3,7 @@
  */
 
 #include "ice/salts_stun.h"
-#include <salts/error_codes.h>
+#include <core/error_codes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

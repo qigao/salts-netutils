@@ -5,7 +5,7 @@
 
 #include "mime_rfc2822.h"
 #include "tinytest.h"
-#include "cmeta_buffer.h"
+#include <memory/buffer.h>
 #include <string.h>
 
 spec("mime_rfc2822") {

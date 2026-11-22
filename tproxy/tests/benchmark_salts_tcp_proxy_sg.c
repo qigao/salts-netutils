@@ -1,8 +1,8 @@
 #include "proxy_test_io.h"
 #include "salts_tcp_proxy_sg.h"
 #include "tinytest.h"
-#include <salts/clock.h>
-#include <salts/error_codes.h>
+#include <core/clock.h>
+#include <core/error_codes.h>
 
 enum {
   PROXY_BENCH_CLIENTS = 4,
@@ -24,7 +24,7 @@ typedef struct proxy_bench_fixture {
   salts_tcp_proxy_sg_t *host;
   proxy_test_echo_t echoes[PROXY_BENCH_CLIENTS];
   proxy_bench_client clients[PROXY_BENCH_CLIENTS];
-  cmeta_thread_t echo_threads[PROXY_BENCH_CLIENTS], client_threads[PROXY_BENCH_CLIENTS];
+  sync_thread_t echo_threads[PROXY_BENCH_CLIENTS], client_threads[PROXY_BENCH_CLIENTS];
   atomic_uint requested;
   atomic_bool cancelled;
 } proxy_bench_fixture;
@@ -39,11 +39,11 @@ static void proxy_bench_client_run(void *user) {
       proxy_test_exchange(peer) != 0) goto fail;
   atomic_store_explicit(&client->completed, 1u, memory_order_release);
   for (unsigned sample = 2u; sample <= PROXY_BENCH_SAMPLES + 1u; ++sample) {
-    uint64_t start = cmeta_monotonic_ms();
+    uint64_t start = monotonic_ms();
     while (atomic_load_explicit(client->requested, memory_order_acquire) < sample) {
       if (atomic_load(client->cancelled)) goto done;
-      if (cmeta_monotonic_ms() - start >= PROXY_BENCH_DEADLINE_MS) goto fail;
-      cmeta_sleep_ms(1u);
+      if (monotonic_ms() - start >= PROXY_BENCH_DEADLINE_MS) goto fail;
+      sleep_ms(1u);
     }
     for (size_t i = 0u; i < PROXY_BENCH_ROUNDTRIPS; ++i) {
       payload[0] = (unsigned char)sample;
@@ -55,7 +55,7 @@ static void proxy_bench_client_run(void *user) {
     atomic_store_explicit(&client->completed, sample, memory_order_release);
   }
   /* Leave physical teardown outside the final timed sample as well. */
-  while (!atomic_load(client->cancelled)) cmeta_sleep_ms(1u);
+  while (!atomic_load(client->cancelled)) sleep_ms(1u);
   goto done;
 fail:
   atomic_store_explicit(&client->failed, true, memory_order_release);
@@ -88,12 +88,12 @@ static void proxy_bench_cleanup(proxy_bench_fixture *f) {
   }
   for (size_t i = 0u; i < PROXY_BENCH_CLIENTS; ++i) {
     if (f->client_threads[i]) {
-      check_warn(cmeta_thread_join(&f->client_threads[i]) == SALTS_OK);
-      cmeta_thread_destroy(&f->client_threads[i]);
+      check_warn(sync_thread_join(&f->client_threads[i]) == SALTS_OK);
+      sync_thread_destroy(&f->client_threads[i]);
     }
     if (f->echo_threads[i]) {
-      check_warn(cmeta_thread_join(&f->echo_threads[i]) == SALTS_OK);
-      cmeta_thread_destroy(&f->echo_threads[i]);
+      check_warn(sync_thread_join(&f->echo_threads[i]) == SALTS_OK);
+      sync_thread_destroy(&f->echo_threads[i]);
     } else proxy_test_close(f->echoes[i].listener);
   }
 }
@@ -101,7 +101,7 @@ static void proxy_bench_cleanup(proxy_bench_fixture *f) {
 /* Fixed four clients: bounded O(clients) state and checks per progress round.
  * Wall time includes controller/fixture wake and SG dispatch, never setup. */
 static int proxy_bench_progress(proxy_bench_fixture *f, unsigned sample) {
-  uint64_t start = cmeta_monotonic_ms();
+  uint64_t start = monotonic_ms();
   for (;;) {
     bool done = true;
     size_t work;
@@ -112,7 +112,7 @@ static int proxy_bench_progress(proxy_bench_fixture *f, unsigned sample) {
       if (atomic_load_explicit(&f->clients[i].completed, memory_order_acquire) < sample) done = false;
     }
     if (done) return SALTS_OK;
-    if (cmeta_monotonic_ms() - start >= PROXY_BENCH_DEADLINE_MS) return SALTS_ETIMEDOUT;
+    if (monotonic_ms() - start >= PROXY_BENCH_DEADLINE_MS) return SALTS_ETIMEDOUT;
   }
 }
 
@@ -133,10 +133,10 @@ static void proxy_bench_measure(proxy_bench_fixture *f, size_t owners, const cha
   for (size_t i = 0u; i < PROXY_BENCH_CLIENTS; ++i) {
     f->echoes[i].listener = proxy_test_echo_listener(&f->echoes[i].port);
     check(f->echoes[i].listener != PROXY_TEST_INVALID_SOCKET);
-    check_equal(cmeta_thread_create(&f->echo_threads[i], proxy_test_echo_run, &f->echoes[i]), SALTS_OK);
+    check_equal(sync_thread_create(&f->echo_threads[i], proxy_test_echo_run, &f->echoes[i]), SALTS_OK);
     f->clients[i].proxy_port = port;
     f->clients[i].backend_port = f->echoes[i].port;
-    check_equal(cmeta_thread_create(&f->client_threads[i], proxy_bench_client_run, &f->clients[i]), SALTS_OK);
+    check_equal(sync_thread_create(&f->client_threads[i], proxy_bench_client_run, &f->clients[i]), SALTS_OK);
   }
   /* Complete all handshakes and a verified warm-up exchange before timing. */
   check_equal(proxy_bench_progress(f, sample), SALTS_OK);

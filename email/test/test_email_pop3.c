@@ -1,6 +1,6 @@
 #include "email/email_pop3.h"
 #include "tinytest.h"
-#include <salts/error_codes.h>
+#include <core/error_codes.h>
 
 #include <stdlib.h>
 

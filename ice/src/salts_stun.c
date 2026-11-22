@@ -15,13 +15,13 @@
 #include "ice/salts_stun.h"
 #include "ice_cnet_datagram.h"
 #include "stun_binding_transaction.h"
-#include <platform.h>
+#include <core/platform.h>
 
-#include <salts/clock.h>
-#include <salts/error_codes.h>
-#include <cmeta_crypto.h>
+#include <core/clock.h>
+#include <core/error_codes.h>
+#include "../../internal/protocol_crypto.h"
 
-#include <fmt.h>
+#include <core/fmt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -100,7 +100,7 @@ static uint32_t stun_crc32(const uint8_t *data, size_t len) {
 int stun_generate_transaction_id(stun_transaction_id_t *txn_id) {
   if (!txn_id)
     return -1;
-  return cmeta_secure_random(txn_id->id, sizeof(txn_id->id));
+  return secure_random(txn_id->id, sizeof(txn_id->id));
 }
 
 static int txn_id_matches(const stun_transaction_id_t *a, const stun_transaction_id_t *b) {
@@ -371,7 +371,7 @@ int stun_binding_transaction_cancel(stun_binding_transaction *transaction) {
  * ICE Connectivity Check Functions
  * ============================================================================ */
 
-#define STUN_MESSAGE_INTEGRITY_LEN SALTS_SHA1_DIGEST_BYTES
+#define STUN_MESSAGE_INTEGRITY_LEN SALTSNET_SHA1_DIGEST_SIZE
 
 static void write_u64_be(uint8_t *buf, uint64_t val) {
   buf[0] = (val >> 56) & 0xFF;
@@ -386,7 +386,7 @@ static void write_u64_be(uint8_t *buf, uint64_t val) {
 
 static int calculate_message_integrity(const uint8_t *data, size_t len, const char *password,
                                        uint8_t *hmac_out) {
-  return cmeta_hmac_sha1(password, strlen(password), data, len, hmac_out) == SALTS_OK ? 0 : -1;
+  return saltsnet_hmac_sha1(password, strlen(password), data, len, hmac_out) == SALTS_OK ? 0 : -1;
 }
 
 int stun_build_ice_request(uint8_t *buffer, const stun_transaction_id_t *txn_id,
@@ -566,15 +566,8 @@ int stun_validate_message_integrity(const uint8_t *data, size_t len, const char 
   }
   free(temp_buf);
 
-  {
-    int equal = 0;
-    if (cmeta_crypto_equal(mi_attr, expected_hmac, STUN_MESSAGE_INTEGRITY_LEN, &equal) != SALTS_OK)
-      return -7;
-    if (!equal)
-      return -7;
-  }
-
-  return 0;
+  return salts_crypto_equal(mi_attr, expected_hmac, STUN_MESSAGE_INTEGRITY_LEN) ==
+         SALTS_CRYPTO_OK ? 0 : -7;
 }
 
 int stun_parse_ice_request(const uint8_t *data, size_t len, char *username_out,

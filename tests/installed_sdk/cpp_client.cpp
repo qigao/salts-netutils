@@ -6,7 +6,7 @@
 #include <salts_lb_sg.h>
 #include <salts_tcp_proxy.h>
 #include <salts_tcp_proxy_sg.h>
-#include <salts/error_codes.h>
+#include <core/error_codes.h>
 #include <ice/salts_ice.h>
 #include <ice/salts_stun.h>
 #include <ice/salts_turn.h>

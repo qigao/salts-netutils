@@ -6,7 +6,7 @@ spec("STUN CNet transport") {
   for (int dropped = 0; dropped <= 1; ++dropped) {
   it("performs a synchronous binding request after dropping %d requests", dropped) {
     stun_test_server_t server;
-    cmeta_thread_t server_thread = NULL;
+    sync_thread_t server_thread = NULL;
     stun_mapped_address_t mapped;
     stun_request_t *request = NULL, *saved;
     uint16_t port = 0u;
@@ -15,7 +15,7 @@ spec("STUN CNet transport") {
     check_equal(stun_test_server_open(&server, &port), 0);
     server.send_mismatched_first = 1;
     server.drop_requests = dropped;
-    check_equal(cmeta_thread_create(&server_thread, stun_test_server_run, &server), 0);
+    check_equal(sync_thread_create(&server_thread, stun_test_server_run, &server), 0);
 
     const stun_client_config_t config = {.server_host = "127.0.0.1",
                                          .server_port = port,
@@ -37,8 +37,8 @@ spec("STUN CNet transport") {
     check_equal(stun_request_destroy(&request), SALTS_OK);
     check(request == NULL);
 
-    check_equal(cmeta_thread_join(&server_thread), 0);
-    cmeta_thread_destroy(&server_thread);
+    check_equal(sync_thread_join(&server_thread), 0);
+    sync_thread_destroy(&server_thread);
     stun_test_server_close(&server);
 
     check_equal(status, 0);

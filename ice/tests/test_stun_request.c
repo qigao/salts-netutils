@@ -1,12 +1,12 @@
 #include "stun_test_server.h"
 #include "ice/salts_turn.h"
-#include <salts/clock.h>
-#include <salts/error_codes.h>
+#include <core/clock.h>
+#include <core/error_codes.h>
 #include <tinytest.h>
 
 spec("public STUN request ownership") {
   static stun_test_server_t server;
-  static cmeta_thread_t thread;
+  static sync_thread_t thread;
   static stun_request_t *request;
   static salts_turn_client_t *client;
   static int server_open;
@@ -21,8 +21,8 @@ spec("public STUN request ownership") {
   after_each() {
     int cleanup = SALTS_OK, joined = 0;
     if (thread) {
-      joined = cmeta_thread_join(&thread);
-      cmeta_thread_destroy(&thread);
+      joined = sync_thread_join(&thread);
+      sync_thread_destroy(&thread);
     }
     if (request) {
       cleanup = stun_request_stop(request, 1000u);
@@ -50,7 +50,7 @@ spec("public STUN request ownership") {
       config.server_port = port;
       server.drop_requests = dropped;
       server.send_mismatched_first = 1;
-      check_equal(cmeta_thread_create(&thread, stun_test_server_run, &server), 0);
+      check_equal(sync_thread_create(&thread, stun_test_server_run, &server), 0);
       check_equal(stun_request_create(&request), SALTS_OK);
       saved = request;
       check_equal(stun_request_start(request, &config), SALTS_OK);
@@ -58,9 +58,9 @@ spec("public STUN request ownership") {
       check_equal(stun_request_start(request, &config), SALTS_EALREADY);
       check_equal(stun_request_destroy(&request), SALTS_EBUSY);
       check(request == saved);
-      deadline = cmeta_monotonic_ms() + STUN_TEST_TIMEOUT_MS;
+      deadline = monotonic_ms() + STUN_TEST_TIMEOUT_MS;
       do {
-        check(cmeta_monotonic_ms() < deadline);
+        check(monotonic_ms() < deadline);
         check_equal(stun_request_progress(request, 10u), SALTS_OK);
         status = stun_request_result(request, &result, &mapped);
       } while (status == SALTS_EBUSY);
@@ -73,8 +73,8 @@ spec("public STUN request ownership") {
       check_equal(result, SALTS_OK);
       check_equal(stun_request_destroy(&request), SALTS_OK);
       check(request == NULL);
-      check_equal(cmeta_thread_join(&thread), 0);
-      cmeta_thread_destroy(&thread);
+      check_equal(sync_thread_join(&thread), 0);
+      sync_thread_destroy(&thread);
       stun_test_server_close(&server);
       server_open = 0;
       check_equal(server.status, 0);
@@ -127,9 +127,9 @@ spec("public STUN request ownership") {
     check_equal(stun_request_create(&request), SALTS_OK);
     check_equal(stun_request_start(request, &config), SALTS_OK);
     mapped.port = 123u;
-    deadline = cmeta_monotonic_ms() + 1000u;
+    deadline = monotonic_ms() + 1000u;
     do {
-      check(cmeta_monotonic_ms() < deadline);
+      check(monotonic_ms() < deadline);
       check_equal(stun_request_progress(request, 10u), SALTS_OK);
       status = stun_request_result(request, &result, &mapped);
     } while (status == SALTS_EBUSY);

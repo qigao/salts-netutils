@@ -1,8 +1,8 @@
 #include "email_cnet_transport.h"
 
-#include <salts/clock.h>
-#include <salts/error_codes.h>
-#include <cmeta_buffer.h>
+#include <core/clock.h>
+#include <core/error_codes.h>
+#include <memory/buffer.h>
 
 #include <limits.h>
 #include <stdio.h>
@@ -129,7 +129,7 @@ static int email_cnet_progress(email_cnet_transport_t *transport, uint32_t wait_
 }
 
 static uint32_t email_cnet_remaining_ms(uint64_t deadline) {
-  const uint64_t now = cmeta_monotonic_ms();
+  const uint64_t now = monotonic_ms();
   uint64_t remaining;
   if (now >= deadline) return 0u;
   remaining = deadline - now;
@@ -180,7 +180,7 @@ static int email_cnet_poll(email_cnet_transport_t *transport, uint64_t deadline)
 }
 
 static int email_cnet_wait_connected(email_cnet_transport_t *transport) {
-  const uint64_t deadline = cmeta_monotonic_ms() + transport->timeout_ms;
+  const uint64_t deadline = monotonic_ms() + transport->timeout_ms;
   int status;
   while (!transport->connected && !transport->terminal) {
     status = email_cnet_poll(transport, deadline);
@@ -206,35 +206,39 @@ static int email_cnet_make_uri(char *uri, size_t capacity, const char *host, uin
   return written >= 0 && (size_t)written < capacity ? SALTS_OK : SALTS_EMSGSIZE;
 }
 
+static int email_cnet_start_client(email_cnet_transport_t *transport) {
+  if (transport->client.impl) return SALTS_OK;
+
+  /* CNet binds the client to its initialization thread. Construction of the
+   * mail object may happen earlier on a different thread. */
+  const cnet_client_config config = {
+      .backend = email_cnet_backend(),
+      .connection_capacity = 1u,
+      .command_capacity = EMAIL_CNET_QUEUE_CAPACITY,
+      .request_capacity = EMAIL_CNET_QUEUE_CAPACITY,
+      .completion_batch_capacity = EMAIL_CNET_QUEUE_CAPACITY,
+      .event_capacity = EMAIL_CNET_QUEUE_CAPACITY,
+      .max_send_bytes = EMAIL_CNET_MAX_SEND_BYTES,
+      .receive_buffer_bytes = EMAIL_CNET_RECEIVE_BYTES,
+      .connect_timeout_ms = transport->timeout_ms,
+      .read_timeout_ms = transport->timeout_ms,
+      .write_timeout_ms = transport->timeout_ms,
+      .tls_io_buffer_bytes = CNET_TLS_MIN_IO_BUFFER_BYTES,
+      .tls_handshake_timeout_ms = transport->timeout_ms,
+      .command_buffer_bytes = EMAIL_CNET_MAX_SEND_BYTES,
+      .event_buffer_bytes = EMAIL_CNET_RECEIVE_BYTES};
+  int status = cnet_client_init(&transport->client, &config);
+  if (status != SALTS_OK) email_cnet_set_error(transport, status, "client init");
+  return status;
+}
+
 int email_cnet_transport_init(email_cnet_transport_t *transport, int timeout_ms) {
-  cnet_client_config config;
-  int status;
   if (transport == NULL || timeout_ms < 0) return SALTS_EINVAL;
 
   memset(transport, 0, sizeof(*transport));
   transport->timeout_ms = timeout_ms > 0 ? (uint32_t)timeout_ms : EMAIL_CNET_DEFAULT_TIMEOUT_MS;
   atomic_init(&transport->active, 0);
   atomic_init(&transport->interrupt_status, SALTS_OK);
-  config = (cnet_client_config){.backend = email_cnet_backend(),
-                                .connection_capacity = 1u,
-                                .command_capacity = EMAIL_CNET_QUEUE_CAPACITY,
-                                .request_capacity = EMAIL_CNET_QUEUE_CAPACITY,
-                                .completion_batch_capacity = EMAIL_CNET_QUEUE_CAPACITY,
-                                .event_capacity = EMAIL_CNET_QUEUE_CAPACITY,
-                                .max_send_bytes = EMAIL_CNET_MAX_SEND_BYTES,
-                                .receive_buffer_bytes = EMAIL_CNET_RECEIVE_BYTES,
-                                .connect_timeout_ms = transport->timeout_ms,
-                                .read_timeout_ms = transport->timeout_ms,
-                                .write_timeout_ms = transport->timeout_ms,
-                                .tls_io_buffer_bytes = CNET_TLS_MIN_IO_BUFFER_BYTES,
-                                .tls_handshake_timeout_ms = transport->timeout_ms,
-                                .command_buffer_bytes = EMAIL_CNET_MAX_SEND_BYTES,
-                                .event_buffer_bytes = EMAIL_CNET_RECEIVE_BYTES};
-  status = cnet_client_init(&transport->client, &config);
-  if (status != SALTS_OK) {
-    email_cnet_set_error(transport, status, "client init");
-    return status;
-  }
   transport->initialized = 1;
   return SALTS_OK;
 }
@@ -243,6 +247,10 @@ int email_cnet_transport_destroy(email_cnet_transport_t *transport) {
   int destroy_status;
   if (transport == NULL) return SALTS_EINVAL;
   if (!transport->initialized) return SALTS_OK;
+  if (!transport->client.impl) {
+    transport->initialized = 0;
+    return SALTS_OK;
+  }
 
   atomic_store_explicit(&transport->interrupt_status, SALTS_OK, memory_order_release);
   if (transport->manager.impl) {
@@ -276,6 +284,8 @@ int email_cnet_transport_connect(email_cnet_transport_t *transport, const char *
     email_cnet_set_error(transport, status, "connect URI");
     return status;
   }
+  status = email_cnet_start_client(transport);
+  if (status != SALTS_OK) return status;
 
   transport->connection = (cnet_connection){0};
   transport->connected = 0;
@@ -356,7 +366,7 @@ int email_cnet_transport_send(email_cnet_transport_t *transport, const void *dat
   while (remaining > 0u) {
     const size_t chunk =
         remaining > EMAIL_CNET_MAX_SEND_BYTES ? EMAIL_CNET_MAX_SEND_BYTES : remaining;
-    const uint64_t deadline = cmeta_monotonic_ms() + transport->timeout_ms;
+    const uint64_t deadline = monotonic_ms() + transport->timeout_ms;
     int status;
     transport->send_pending = 1;
     status = email_cnet_send_bytes(
@@ -404,7 +414,7 @@ int email_cnet_transport_receive(email_cnet_transport_t *transport, void *data, 
       return status;
     }
 
-    deadline = cmeta_monotonic_ms() + transport->timeout_ms;
+    deadline = monotonic_ms() + transport->timeout_ms;
     while (!transport->receive_ready && transport->receive_error == SALTS_OK &&
            !transport->terminal) {
       status = email_cnet_poll(transport, deadline);
@@ -443,7 +453,7 @@ int email_cnet_transport_close(email_cnet_transport_t *transport) {
     }
   }
 
-  deadline = cmeta_monotonic_ms() + transport->timeout_ms;
+  deadline = monotonic_ms() + transport->timeout_ms;
   while (atomic_load_explicit(&transport->active, memory_order_acquire) != 0) {
     const uint32_t wait_ms = email_cnet_remaining_ms(deadline);
     if (wait_ms == 0u) {

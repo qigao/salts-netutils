@@ -5,8 +5,8 @@
 #include <ice/salts_turn.h>
 #include <ice/salts_ice.h>
 #include <cnet/cnet.h>
-#include <salts/clock.h>
-#include <salts/error_codes.h>
+#include <core/clock.h>
+#include <core/error_codes.h>
 #include <string.h>
 
 typedef struct installed_stun_server {
@@ -82,8 +82,8 @@ static int installed_stun_owner(void) {
   if (status == SALTS_OK) status = cnet_datagram_receive(&server, 1u);
   if (status == SALTS_OK) status = stun_request_create(&request);
   if (status == SALTS_OK) status = stun_request_start(request, &request_config);
-  deadline = cmeta_monotonic_ms() + 2000u;
-  while (status == SALTS_OK && query == SALTS_EBUSY && cmeta_monotonic_ms() < deadline) {
+  deadline = monotonic_ms() + 2000u;
+  while (status == SALTS_OK && query == SALTS_EBUSY && monotonic_ms() < deadline) {
     status = cnet_datagram_poll(&server, 0u, &events);
     if (status == SALTS_OK) status = stun_request_progress(request, 1u);
     if (status == SALTS_OK) query = stun_request_result(request, &result, &mapped);

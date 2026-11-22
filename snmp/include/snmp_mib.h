@@ -4,7 +4,7 @@
 
 #include "snmp_api.h"
 #include "snmp_types.h"
-#include "platform.h"
+#include <core/platform.h>
 
 #ifdef __cplusplus
 extern "C" {

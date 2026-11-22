@@ -50,35 +50,19 @@ endif()
 include(Sanitizers)
 include(CmakeUtils)
 
-find_package(Threads REQUIRED)
+# The product presets read a restored vcpkg profile without invoking vcpkg.
+if(NOT CMAKE_TOOLCHAIN_FILE AND VCPKG_INSTALLED_DIR AND VCPKG_TARGET_TRIPLET)
+  set(_saltsnet_vcpkg_prefix "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+  if(NOT IS_DIRECTORY "${_saltsnet_vcpkg_prefix}")
+    message(FATAL_ERROR "Preinstalled vcpkg triplet directory is missing: ${_saltsnet_vcpkg_prefix}")
+  endif()
+  list(PREPEND CMAKE_PREFIX_PATH "${_saltsnet_vcpkg_prefix}")
+  if(NOT "$ENV{VCPKG_CONFIGURATION_SUBDIR}" STREQUAL "")
+    list(PREPEND CMAKE_PREFIX_PATH "${_saltsnet_vcpkg_prefix}/$ENV{VCPKG_CONFIGURATION_SUBDIR}")
+  endif()
+endif()
 
-if(NOT DEFINED ENV{SALTS_ROOT} OR "$ENV{SALTS_ROOT}" STREQUAL "")
-  message(FATAL_ERROR "Required dependency root is not defined: SALTS_ROOT")
-endif()
-if(NOT IS_DIRECTORY "$ENV{SALTS_ROOT}")
-  message(FATAL_ERROR "SALTS_ROOT is not a directory: $ENV{SALTS_ROOT}")
-endif()
-file(TO_CMAKE_PATH "$ENV{SALTS_ROOT}" SALTSNET_SALTS_ROOT_PATH)
-# Reconfiguration must follow the restored SDK, not an older cached package.
-unset(Salts_DIR CACHE)
-unset(Salts_DIR)
-find_package(
-  Salts 2.3 CONFIG REQUIRED
-  PATHS "${SALTSNET_SALTS_ROOT_PATH}"
-  NO_DEFAULT_PATH
-  NO_CMAKE_FIND_ROOT_PATH)
-
-if(NOT DEFINED ENV{SALTS_UTILS_ROOT} OR NOT IS_DIRECTORY "$ENV{SALTS_UTILS_ROOT}")
-  message(FATAL_ERROR "SALTS_UTILS_ROOT must name the restored SaltsUtils 4.3 SDK")
-endif()
-file(TO_CMAKE_PATH "$ENV{SALTS_UTILS_ROOT}" SALTSNET_SALTS_UTILS_ROOT_PATH)
-unset(SaltsUtils_DIR CACHE)
-unset(SaltsUtils_DIR)
-find_package(
-  SaltsUtils 4.3 CONFIG REQUIRED
-  PATHS "${SALTSNET_SALTS_UTILS_ROOT_PATH}"
-  NO_DEFAULT_PATH
-  NO_CMAKE_FIND_ROOT_PATH)
+include(cmake/SaltsNetDependencies.cmake)
 # Additional components
 add_subdirectory(tools)
 include(FindTools)
@@ -104,6 +88,7 @@ configure_package_config_file(
   "${CMAKE_SOURCE_DIR}/cmake/SaltsNetConfig.cmake.in"
   "${CMAKE_BINARY_DIR}/SaltsNetConfig.cmake"
   INSTALL_DESTINATION "lib/cmake/SaltsNet")
+configure_file(cmake/SaltsNetDependencies.cmake SaltsNetDependencies.cmake COPYONLY)
 
 # Generate the version file
 write_basic_package_version_file(
@@ -114,6 +99,7 @@ write_basic_package_version_file(
 # Install the config files
 install(FILES "${CMAKE_BINARY_DIR}/SaltsNetConfig.cmake"
               "${CMAKE_BINARY_DIR}/SaltsNetConfigVersion.cmake"
+              "${CMAKE_CURRENT_SOURCE_DIR}/cmake/SaltsNetDependencies.cmake"
         DESTINATION "lib/cmake/SaltsNet")
 
 # Install the export set

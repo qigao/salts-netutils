@@ -1,8 +1,8 @@
 #include "sg_host.h"
 
-#include <salts/clock.h>
-#include <salts/error_codes.h>
-#include <salts/thread.h>
+#include <core/clock.h>
+#include <core/error_codes.h>
+#include <threads/threads.h>
 #include <stdlib.h>
 
 typedef struct salts_sg_owner {
@@ -391,7 +391,7 @@ int salts_sg_port(const salts_sg_host *host, size_t owner, bool worker, uint16_t
 }
 
 int salts_sg_poll(salts_sg_host *host, uint32_t timeout_ms, size_t *out_work) {
-  uint64_t start = cmeta_monotonic_ms();
+  uint64_t start = monotonic_ms();
   int status = salts_sg_control(host);
   if (out_work) *out_work = 0u;
   if (status != SALTS_OK) return status;
@@ -401,15 +401,15 @@ int salts_sg_poll(salts_sg_host *host, uint32_t timeout_ms, size_t *out_work) {
   do {
     status = salts_sg_run(host, salts_sg_progress_owner, 0u, host->config.owner_count);
     for (size_t i = 0u; i < host->config.owner_count; ++i) *out_work += host->owners[i].work;
-    if (status != SALTS_OK || *out_work || cmeta_monotonic_ms() - start >= timeout_ms) break;
-    cmeta_sleep_ms(1u);
+    if (status != SALTS_OK || *out_work || monotonic_ms() - start >= timeout_ms) break;
+    sleep_ms(1u);
   } while (true);
   host->active = false;
   return status;
 }
 
 int salts_sg_stop(salts_sg_host *host) {
-  uint64_t start = cmeta_monotonic_ms();
+  uint64_t start = monotonic_ms();
   int status = salts_sg_control(host), first = SALTS_OK;
   if (status != SALTS_OK) return status;
   if (host->stopped) return SALTS_OK;
@@ -430,11 +430,11 @@ int salts_sg_stop(salts_sg_host *host) {
       for (size_t i = 0u; i < host->config.owner_count; ++i)
         if (host->owners[i].lease.generation != 0u) drained = false;
       if (drained) break;
-      if (cmeta_monotonic_ms() - start >= host->config.shutdown_timeout_ms) {
+      if (monotonic_ms() - start >= host->config.shutdown_timeout_ms) {
         host->active = false;
         return first != SALTS_OK ? first : SALTS_ETIMEDOUT;
       }
-      cmeta_sleep_ms(1u);
+      sleep_ms(1u);
     }
     status = native_io_sharded_shutdown(host->runtime);
     if (status == SALTS_OK) host->stopped = true;

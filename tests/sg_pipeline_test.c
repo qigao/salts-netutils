@@ -1,8 +1,8 @@
 #include "../tproxy/tests/proxy_test_io.h"
 #include <salts_lb_sg.h>
 #include <salts_tcp_proxy_sg.h>
-#include <salts/clock.h>
-#include <salts/error_codes.h>
+#include <core/clock.h>
+#include <core/error_codes.h>
 #include <tinytest.h>
 
 typedef struct pipeline_fixture pipeline_fixture;
@@ -18,7 +18,7 @@ struct pipeline_fixture {
   salts_lb_sg_t *lb;
   salts_tcp_proxy_sg_t *proxy;
   pipeline_peer workers[2], clients[2];
-  cmeta_thread_t worker_threads[2], client_threads[2];
+  sync_thread_t worker_threads[2], client_threads[2];
   proxy_test_socket_t slow_worker;
   uint16_t lb_port, proxy_port, worker_ports[2];
   atomic_bool release_failure;
@@ -59,10 +59,10 @@ static void pipeline_peer_run(void *user) {
         proxy_test_recv_exact(socket_value, buffer, sizeof(buffer)) != 0 ||
         memcmp(buffer, payload, sizeof(buffer)) != 0) goto done;
     if (peer->disconnect) {
-      uint64_t start = cmeta_monotonic_ms();
+      uint64_t start = monotonic_ms();
       while (!atomic_load_explicit(&peer->fixture->release_failure, memory_order_acquire)) {
-        if (cmeta_monotonic_ms() - start >= PROXY_TEST_TIMEOUT_MS) goto done;
-        cmeta_sleep_ms(1u);
+        if (monotonic_ms() - start >= PROXY_TEST_TIMEOUT_MS) goto done;
+        sleep_ms(1u);
       }
     } else if (proxy_test_send_all(socket_value, buffer, sizeof(buffer)) != 0) goto done;
   } else {
@@ -85,12 +85,12 @@ static void pipeline_poll(pipeline_fixture *f) {
 }
 
 static void pipeline_wait_placement(pipeline_fixture *f, uint64_t expected) {
-  uint64_t start = cmeta_monotonic_ms();
+  uint64_t start = monotonic_ms();
   salts_lb_sg_stats_t stats;
   do {
     pipeline_poll(f);
     check_equal(salts_lb_sg_get_stats(f->lb, &stats), SALTS_OK);
-    check(cmeta_monotonic_ms() - start < PROXY_TEST_TIMEOUT_MS);
+    check(monotonic_ms() - start < PROXY_TEST_TIMEOUT_MS);
   } while (stats.placement_calls < expected);
 }
 
@@ -131,12 +131,12 @@ spec("Proxy SG -> LB SG mixed dependency isolation") {
     }
     for (size_t i = 0u; i < 2u; ++i) {
       if (f.worker_threads[i]) {
-        check_warn(cmeta_thread_join(&f.worker_threads[i]) == SALTS_OK);
-        cmeta_thread_destroy(&f.worker_threads[i]);
+        check_warn(sync_thread_join(&f.worker_threads[i]) == SALTS_OK);
+        sync_thread_destroy(&f.worker_threads[i]);
       }
       if (f.client_threads[i]) {
-        check_warn(cmeta_thread_join(&f.client_threads[i]) == SALTS_OK);
-        cmeta_thread_destroy(&f.client_threads[i]);
+        check_warn(sync_thread_join(&f.client_threads[i]) == SALTS_OK);
+        sync_thread_destroy(&f.client_threads[i]);
       }
     }
   }
@@ -178,13 +178,13 @@ spec("Proxy SG -> LB SG mixed dependency isolation") {
       f.workers[i].port = f.worker_ports[i];
       f.clients[i].port = f.proxy_port;
       f.clients[i].target_port = f.lb_port;
-      check_equal(cmeta_thread_create(&f.worker_threads[i], pipeline_peer_run, &f.workers[i]), SALTS_OK);
-      check_equal(cmeta_thread_create(&f.client_threads[i], pipeline_peer_run, &f.clients[i]), SALTS_OK);
+      check_equal(sync_thread_create(&f.worker_threads[i], pipeline_peer_run, &f.workers[i]), SALTS_OK);
+      check_equal(sync_thread_create(&f.client_threads[i], pipeline_peer_run, &f.clients[i]), SALTS_OK);
       pipeline_wait_placement(&f, i + 1u);
     }
     /* Both dependency paths are admitted before the first worker may fail. */
     atomic_store_explicit(&f.release_failure, true, memory_order_release);
-    start = cmeta_monotonic_ms();
+    start = monotonic_ms();
     for (;;) {
       bool done = true;
       pipeline_poll(&f);
@@ -196,7 +196,7 @@ spec("Proxy SG -> LB SG mixed dependency isolation") {
       if (done && proxy_stats.owners[0].drained && proxy_stats.owners[1].drained &&
           lb_stats.owners[1].drained &&
           lb_stats.owners[0].reserved + lb_stats.owners[0].queued + lb_stats.owners[0].taken == 1u) break;
-      check(cmeta_monotonic_ms() - start < PROXY_TEST_TIMEOUT_MS);
+      check(monotonic_ms() - start < PROXY_TEST_TIMEOUT_MS);
     }
     for (size_t i = 0u; i < 2u; ++i) {
       check_equal(f.workers[i].status, 0);

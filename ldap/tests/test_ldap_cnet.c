@@ -18,7 +18,7 @@ typedef int ldap_test_socket_t;
 #include "ldap_parser.h"
 #include "tinytest.h"
 
-#include <salts/thread.h>
+#include <threads/threads.h>
 
 #include <stdint.h>
 #include <stdio.h>
@@ -212,7 +212,7 @@ static int ldap_test_make_url(char *url, size_t capacity, const char *scheme, ui
 spec("LDAP CNet transport") {
   it("returns Bind rejection and permits explicit rebind after managed terminal drain") {
     ldap_test_server_t server;
-    cmeta_thread_t thread = NULL;
+    sync_thread_t thread = NULL;
     ldap_client_t *client;
     ldap_result_data_t result = {0};
     char url[LDAP_TEST_URI_CAPACITY];
@@ -221,7 +221,7 @@ spec("LDAP CNet transport") {
     check_equal(ldap_test_server_open(&server, &port), 0);
     server.behavior = LDAP_TEST_REBIND;
     check_equal(ldap_test_make_url(url, sizeof(url), "ldap", port), 0);
-    check_equal(cmeta_thread_create(&thread, ldap_test_server_run, &server), 0);
+    check_equal(sync_thread_create(&thread, ldap_test_server_run, &server), 0);
     const ldap_client_config_t config = {.url = url, .timeout_ms = LDAP_TEST_CLIENT_TIMEOUT_MS};
     client = ldap_client_create(&config);
     if (client) {
@@ -234,8 +234,8 @@ spec("LDAP CNet transport") {
       last_close = ldap_client_unbind(client);
     }
     ldap_client_destroy(client);
-    check_equal(cmeta_thread_join(&thread), 0);
-    cmeta_thread_destroy(&thread);
+    check_equal(sync_thread_join(&thread), 0);
+    sync_thread_destroy(&thread);
     ldap_test_server_close(&server);
     check_equal(rejected, -6);
     check_equal(rejection_code, LDAP_INVALID_CREDENTIALS);
@@ -247,7 +247,7 @@ spec("LDAP CNet transport") {
 
   it("performs a loopback bind without a coroutine context") {
     ldap_test_server_t server;
-    cmeta_thread_t thread = NULL;
+    sync_thread_t thread = NULL;
     ldap_client_t *client = NULL;
     ldap_result_data_t result = {0};
     char url[LDAP_TEST_URI_CAPACITY];
@@ -257,7 +257,7 @@ spec("LDAP CNet transport") {
     check_equal(ldap_test_server_open(&server, &port), 0);
     server.behavior = LDAP_TEST_SEND_BIND_RESPONSE;
     check_equal(ldap_test_make_url(url, sizeof(url), "ldap", port), 0);
-    check_equal(cmeta_thread_create(&thread, ldap_test_server_run, &server), 0);
+    check_equal(sync_thread_create(&thread, ldap_test_server_run, &server), 0);
 
     const ldap_client_config_t config = {.url = url, .timeout_ms = LDAP_TEST_CLIENT_TIMEOUT_MS};
     client = ldap_client_create(&config);
@@ -265,8 +265,8 @@ spec("LDAP CNet transport") {
     if (client != NULL) client_status = ldap_client_simple_bind(client, "", "", &result);
 
     ldap_client_destroy(client);
-    check_equal(cmeta_thread_join(&thread), 0);
-    cmeta_thread_destroy(&thread);
+    check_equal(sync_thread_join(&thread), 0);
+    sync_thread_destroy(&thread);
     ldap_test_server_close(&server);
 
     check_equal(client_status, 0);
@@ -277,7 +277,7 @@ spec("LDAP CNet transport") {
 
   it("rejects a plaintext LDAPS peer after sending a real TLS ClientHello") {
     ldap_test_server_t server;
-    cmeta_thread_t thread = NULL;
+    sync_thread_t thread = NULL;
     ldap_client_t *client = NULL;
     char url[LDAP_TEST_URI_CAPACITY];
     uint16_t port = 0u;
@@ -286,7 +286,7 @@ spec("LDAP CNet transport") {
     check_equal(ldap_test_server_open(&server, &port), 0);
     server.behavior = LDAP_TEST_INVALID_TLS;
     check_equal(ldap_test_make_url(url, sizeof(url), "ldaps", port), 0);
-    check_equal(cmeta_thread_create(&thread, ldap_test_server_run, &server), 0);
+    check_equal(sync_thread_create(&thread, ldap_test_server_run, &server), 0);
 
     /* Include TLS context setup in the same operation budget as connection
      * progress. This test requires protocol rejection, not a cold-start timeout. */
@@ -296,8 +296,8 @@ spec("LDAP CNet transport") {
     if (client != NULL) connect_status = ldap_client_connect(client);
 
     ldap_client_destroy(client);
-    check_equal(cmeta_thread_join(&thread), 0);
-    cmeta_thread_destroy(&thread);
+    check_equal(sync_thread_join(&thread), 0);
+    sync_thread_destroy(&thread);
     ldap_test_server_close(&server);
 
     check_equal(connect_status, -7); /* LDAP_CLIENT_ERROR_TLS */

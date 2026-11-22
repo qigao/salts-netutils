@@ -10,7 +10,7 @@
 
 
 #include "asn1_api.h"
-#include "platform.h"
+#include <core/platform.h>
 #include <stdint.h>
 #include <stddef.h>
 

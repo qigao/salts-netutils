@@ -10,7 +10,7 @@
 #include <ice/salts_stun.h>
 #include <ice/salts_turn.h>
 #include <cnet/destination_policy.h>
-#include <salts/error_codes.h>
+#include <core/error_codes.h>
 
 #include <string.h>
 #include "protocol_clients.h"

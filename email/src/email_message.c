@@ -4,8 +4,8 @@
 #include "mime_encoded_word.h"
 #include "mime_rfc2231.h"
 #include "mime_content_disposition.h"
-#include "base64_utils.h"
-#include <fmt.h>
+#include <core/base64.h>
+#include <core/fmt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

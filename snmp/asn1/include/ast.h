@@ -3,7 +3,7 @@
 
 
 #include "asn1_api.h"
-#include "platform.h"
+#include <core/platform.h>
 
 #ifdef __cplusplus
 extern "C" {

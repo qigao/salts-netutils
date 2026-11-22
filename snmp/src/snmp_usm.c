@@ -5,11 +5,11 @@
 
 #include "snmp_usm.h"
 #include "snmp_usm_wire.h"
-#include "memory_pool.h"
-#include <salts/asn1_value.h>
-#include <salts/clock.h>
-#include <platform.h>
-#include <cmeta_crypto.h>
+#include <memory/memory_pool.h>
+#include <asn1_value.h>
+#include <core/clock.h>
+#include <core/platform.h>
+#include "../../internal/protocol_crypto.h"
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
@@ -40,8 +40,8 @@ static int usm_generate_salt(snmp_priv_protocol_t priv_protocol,
 
     if (priv_protocol == SNMP_PRIV_DES) {
         if (usm_des_salt_counter == 0u &&
-            cmeta_secure_random(&usm_des_salt_counter,
-                                sizeof(usm_des_salt_counter)) != SALTS_OK) {
+            secure_random(&usm_des_salt_counter,
+                                sizeof(usm_des_salt_counter)) != 0) {
             status = USM_ERROR_INVALID;
         } else if (usm_des_salt_counter == UINT32_MAX) {
             status = USM_ERROR_INVALID;
@@ -52,8 +52,8 @@ static int usm_generate_salt(snmp_priv_protocol_t priv_protocol,
         }
     } else {
         if (usm_aes_salt_counter == 0u &&
-            cmeta_secure_random(&usm_aes_salt_counter,
-                                sizeof(usm_aes_salt_counter)) != SALTS_OK) {
+            secure_random(&usm_aes_salt_counter,
+                                sizeof(usm_aes_salt_counter)) != 0) {
             status = USM_ERROR_INVALID;
         } else if (usm_aes_salt_counter == UINT64_MAX) {
             status = USM_ERROR_INVALID;
@@ -105,17 +105,17 @@ int usm_password_to_key(
     int result = USM_OK;
     switch (auth_protocol) {
         case SNMP_AUTH_MD5:
-            if (cmeta_md5(buffer, 1048576u, key) != SALTS_OK) {
+            if (salts_crypto_md5(buffer, 1048576u, key) != SALTS_CRYPTO_OK) {
                 result = USM_ERROR_INVALID;
             } else {
-                *key_len = SALTS_MD5_DIGEST_BYTES;
+                *key_len = SALTS_CRYPTO_MD5_DIGEST_SIZE;
             }
             break;
         case SNMP_AUTH_SHA1:
-            if (cmeta_sha1(buffer, 1048576u, key) != SALTS_OK) {
+            if (saltsnet_digest_sha1(buffer, 1048576u, key) != SALTS_CRYPTO_OK) {
                 result = USM_ERROR_INVALID;
             } else {
-                *key_len = SALTS_SHA1_DIGEST_BYTES;
+                *key_len = SALTSNET_SHA1_DIGEST_SIZE;
             }
             break;
         default:
@@ -166,17 +166,17 @@ int usm_localize_key(
     int result = USM_OK;
     switch (auth_protocol) {
         case SNMP_AUTH_MD5:
-            if (cmeta_md5(buffer, offset, localized_key) != SALTS_OK) {
+            if (salts_crypto_md5(buffer, offset, localized_key) != SALTS_CRYPTO_OK) {
                 result = USM_ERROR_INVALID;
             } else {
-                *localized_key_len = SALTS_MD5_DIGEST_BYTES;
+                *localized_key_len = SALTS_CRYPTO_MD5_DIGEST_SIZE;
             }
             break;
         case SNMP_AUTH_SHA1:
-            if (cmeta_sha1(buffer, offset, localized_key) != SALTS_OK) {
+            if (saltsnet_digest_sha1(buffer, offset, localized_key) != SALTS_CRYPTO_OK) {
                 result = USM_ERROR_INVALID;
             } else {
-                *localized_key_len = SALTS_SHA1_DIGEST_BYTES;
+                *localized_key_len = SALTSNET_SHA1_DIGEST_SIZE;
             }
             break;
         default:
@@ -202,20 +202,20 @@ int usm_compute_auth(
         return USM_ERROR_INVALID;
     }
 
-    uint8_t hmac[SALTS_SHA1_DIGEST_BYTES];
+    uint8_t hmac[SALTSNET_SHA1_DIGEST_SIZE];
     int status;
 
     switch (auth_protocol) {
         case SNMP_AUTH_MD5:
-            status = cmeta_hmac_md5(key, key_len, message, message_len, hmac);
+            status = salts_crypto_hmac_md5(key, key_len, message, message_len, hmac);
             break;
         case SNMP_AUTH_SHA1:
-            status = cmeta_hmac_sha1(key, key_len, message, message_len, hmac);
+            status = saltsnet_hmac_sha1(key, key_len, message, message_len, hmac);
             break;
         default:
             return USM_ERROR_UNSUPPORTED;
     }
-    if (status != SALTS_OK) return USM_ERROR_INVALID;
+    if (status != SALTS_CRYPTO_OK) return USM_ERROR_INVALID;
 
     /* Truncate to first 12 bytes (RFC 3414) */
     memcpy(auth_params, hmac, 12u);
@@ -242,13 +242,9 @@ int usm_verify_auth(
         return result;
     }
 
-    /* Constant-time comparison */
-    {
-        int equal = 0;
-        if (cmeta_crypto_equal(computed, auth_params, sizeof(computed), &equal) != SALTS_OK)
-            return USM_ERROR_INVALID;
-        return equal ? USM_OK : USM_ERROR_AUTH_FAILED;
-    }
+    int status = salts_crypto_equal(computed, auth_params, sizeof(computed));
+    if (status == SALTS_CRYPTO_OK) return USM_OK;
+    return status == SALTS_CRYPTO_EVERIFY ? USM_ERROR_AUTH_FAILED : USM_ERROR_INVALID;
 }
 
 /*
@@ -285,9 +281,9 @@ int usm_encrypt(
         }
 
         /* Pre-IV: salt XOR key[8..15] */
-        uint8_t iv[SALTS_DES_BLOCK_BYTES];
-        for (size_t i = 0; i < SALTS_DES_BLOCK_BYTES; i++) {
-            iv[i] = salt_out[i] ^ key[SALTS_DES_KEY_BYTES + i];
+        uint8_t iv[SALTS_CRYPTO_DES_BLOCK_SIZE];
+        for (size_t i = 0; i < SALTS_CRYPTO_DES_BLOCK_SIZE; i++) {
+            iv[i] = salt_out[i] ^ key[SALTS_CRYPTO_DES_BLOCK_SIZE + i];
         }
 
         /* Pad plaintext to whole DES blocks; preserve existing USM wire behavior. */
@@ -304,7 +300,8 @@ int usm_encrypt(
             }
         }
 
-        if (cmeta_des_cbc_encrypt(key, iv, padded, padded_len, ciphertext) != SALTS_OK) {
+        if (salts_crypto_des_cbc_crypt(0, key, iv, padded, padded_len,
+                                      ciphertext, *ciphertext_len) != SALTS_CRYPTO_OK) {
             free(padded);
             return USM_ERROR_INVALID;
         }
@@ -314,7 +311,7 @@ int usm_encrypt(
 
     } else if (priv_protocol == SNMP_PRIV_AES128) {
         /* AES-128-CFB encryption (RFC 3826) */
-        const size_t required_key_len = SALTS_AES128_KEY_BYTES;
+        const size_t required_key_len = SALTS_CRYPTO_AES128_BLOCK_SIZE;
 
         if (key_len < required_key_len || *ciphertext_len < plaintext_len) {
             return USM_ERROR_INVALID;
@@ -324,12 +321,13 @@ int usm_encrypt(
         }
 
         /* IV = engineBoots || engineTime || salt */
-        uint8_t iv[SALTS_AES_BLOCK_BYTES];
+        uint8_t iv[SALTS_CRYPTO_AES128_BLOCK_SIZE];
         usm_store_u32_be(iv, engine_boots);
         usm_store_u32_be(iv + 4u, engine_time);
         memcpy(iv + 8u, salt_out, 8u);
 
-        if (cmeta_aes128_cfb_encrypt(key, iv, plaintext, plaintext_len, ciphertext) != SALTS_OK)
+        if (salts_crypto_aes128_cfb_crypt(0, key, iv, plaintext, plaintext_len,
+                                         ciphertext, *ciphertext_len) != SALTS_CRYPTO_OK)
             return USM_ERROR_INVALID;
         *ciphertext_len = plaintext_len;  /* CFB mode, no padding */
 
@@ -363,18 +361,19 @@ int usm_decrypt(
 
     if (priv_protocol == SNMP_PRIV_DES) {
         /* DES-CBC decryption (RFC 3414) */
-        if (key_len < 16 || ciphertext_len % SALTS_DES_BLOCK_BYTES != 0 ||
+        if (key_len < 16 || ciphertext_len % SALTS_CRYPTO_DES_BLOCK_SIZE != 0 ||
             *plaintext_len < ciphertext_len) {
             return USM_ERROR_INVALID;
         }
 
         /* Pre-IV: salt XOR key[8..15] */
-        uint8_t iv[SALTS_DES_BLOCK_BYTES];
-        for (size_t i = 0; i < SALTS_DES_BLOCK_BYTES; i++) {
-            iv[i] = salt[i] ^ key[SALTS_DES_KEY_BYTES + i];
+        uint8_t iv[SALTS_CRYPTO_DES_BLOCK_SIZE];
+        for (size_t i = 0; i < SALTS_CRYPTO_DES_BLOCK_SIZE; i++) {
+            iv[i] = salt[i] ^ key[SALTS_CRYPTO_DES_BLOCK_SIZE + i];
         }
 
-        if (cmeta_des_cbc_decrypt(key, iv, ciphertext, ciphertext_len, plaintext) != SALTS_OK) {
+        if (salts_crypto_des_cbc_crypt(1, key, iv, ciphertext, ciphertext_len,
+                                      plaintext, *plaintext_len) != SALTS_CRYPTO_OK) {
             return USM_ERROR_INVALID;
         }
 
@@ -405,19 +404,20 @@ int usm_decrypt(
 
     } else if (priv_protocol == SNMP_PRIV_AES128) {
         /* AES-128-CFB decryption (RFC 3826) */
-        const size_t required_key_len = SALTS_AES128_KEY_BYTES;
+        const size_t required_key_len = SALTS_CRYPTO_AES128_BLOCK_SIZE;
 
         if (key_len < required_key_len || *plaintext_len < ciphertext_len) {
             return USM_ERROR_INVALID;
         }
 
         /* IV = engineBoots || engineTime || salt */
-        uint8_t iv[SALTS_AES_BLOCK_BYTES];
+        uint8_t iv[SALTS_CRYPTO_AES128_BLOCK_SIZE];
         usm_store_u32_be(iv, engine_boots);
         usm_store_u32_be(iv + 4u, engine_time);
         memcpy(iv + 8u, salt, 8u);
 
-        if (cmeta_aes128_cfb_decrypt(key, iv, ciphertext, ciphertext_len, plaintext) != SALTS_OK)
+        if (salts_crypto_aes128_cfb_crypt(1, key, iv, ciphertext, ciphertext_len,
+                                         plaintext, *plaintext_len) != SALTS_CRYPTO_OK)
             return USM_ERROR_INVALID;
         *plaintext_len = ciphertext_len;  /* CFB mode, no padding */
 
@@ -539,55 +539,55 @@ int snmp_usm_encode_security_params_sized(
         return USM_ERROR_INVALID;
     }
 
-    salts_asn1_value *seq = NULL;
-    salts_asn1_value *field = NULL;
+    asn1_value *seq = NULL;
+    asn1_value *field = NULL;
     size_t written = 0u;
     size_t user_name_len = params->user_name ? strlen(params->user_name) : 0u;
-    if (salts_asn1_value_create_sequence(&seq) != SALTS_ASN1_OK ||
-        salts_asn1_value_create_octet_string(params->authoritative_engine_id,
+    if (asn1_value_create_sequence(&seq) != SALTS_ASN1_OK ||
+        asn1_value_create_octet_string(params->authoritative_engine_id,
                                              params->engine_id_len,
                                              &field) != SALTS_ASN1_OK ||
-        salts_asn1_value_add_child(seq, field) != SALTS_ASN1_OK)
+        asn1_value_add_child(seq, field) != SALTS_ASN1_OK)
         goto invalid;
     field = NULL;
-    if (salts_asn1_value_create_integer(params->engine_boots, &field) !=
+    if (asn1_value_create_integer(params->engine_boots, &field) !=
             SALTS_ASN1_OK ||
-        salts_asn1_value_add_child(seq, field) != SALTS_ASN1_OK)
+        asn1_value_add_child(seq, field) != SALTS_ASN1_OK)
         goto invalid;
     field = NULL;
-    if (salts_asn1_value_create_integer(params->engine_time, &field) !=
+    if (asn1_value_create_integer(params->engine_time, &field) !=
             SALTS_ASN1_OK ||
-        salts_asn1_value_add_child(seq, field) != SALTS_ASN1_OK)
+        asn1_value_add_child(seq, field) != SALTS_ASN1_OK)
         goto invalid;
     field = NULL;
-    if (salts_asn1_value_create_octet_string(params->user_name, user_name_len,
+    if (asn1_value_create_octet_string(params->user_name, user_name_len,
                                              &field) != SALTS_ASN1_OK ||
-        salts_asn1_value_add_child(seq, field) != SALTS_ASN1_OK)
+        asn1_value_add_child(seq, field) != SALTS_ASN1_OK)
         goto invalid;
     field = NULL;
-    if (salts_asn1_value_create_octet_string(params->auth_params,
+    if (asn1_value_create_octet_string(params->auth_params,
                                              auth_params_len,
                                              &field) != SALTS_ASN1_OK ||
-        salts_asn1_value_add_child(seq, field) != SALTS_ASN1_OK)
+        asn1_value_add_child(seq, field) != SALTS_ASN1_OK)
         goto invalid;
     field = NULL;
-    if (salts_asn1_value_create_octet_string(params->priv_params,
+    if (asn1_value_create_octet_string(params->priv_params,
                                              priv_params_len,
                                              &field) != SALTS_ASN1_OK ||
-        salts_asn1_value_add_child(seq, field) != SALTS_ASN1_OK)
+        asn1_value_add_child(seq, field) != SALTS_ASN1_OK)
         goto invalid;
     field = NULL;
-    if (salts_asn1_value_encode(seq, SALTS_ASN1_DER, 0u, out, *out_len,
+    if (asn1_value_encode(seq, SALTS_ASN1_DER, 0u, out, *out_len,
                                 &written) != SALTS_ASN1_OK) {
         *out_len = written;
         goto invalid;
     }
     *out_len = written;
-    salts_asn1_value_free(seq);
+    asn1_value_free(seq);
     return USM_OK;
 invalid:
-    salts_asn1_value_free(field);
-    salts_asn1_value_free(seq);
+    asn1_value_free(field);
+    asn1_value_free(seq);
     return USM_ERROR_INVALID;
 }
 
@@ -610,8 +610,8 @@ int usm_decode_security_params(
     void *pool
 ) {
     uint8_t *engine_id_copy = NULL;
-    salts_asn1_value *root = NULL;
-    const salts_asn1_value *children[6];
+    asn1_value *root = NULL;
+    const asn1_value *children[6];
     const uint8_t *content = NULL;
     size_t content_size = 0u;
     int64_t integer = 0;
@@ -623,25 +623,25 @@ int usm_decode_security_params(
 
     MemoryPool *mem_pool = (MemoryPool *)pool;
 
-    if (salts_asn1_value_decode(data, len, SALTS_ASN1_BER, &root) !=
+    if (asn1_value_decode(data, len, SALTS_ASN1_BER, &root) !=
             SALTS_ASN1_OK ||
-        salts_asn1_value_get_tag(root, &tag_class, &constructed, &tag_number) !=
+        asn1_value_get_tag(root, &tag_class, &constructed, &tag_number) !=
             SALTS_ASN1_OK ||
         tag_class != 0u || !constructed || tag_number != 16u ||
-        salts_asn1_value_child_count(root) != 6u) {
-        salts_asn1_value_free(root);
+        asn1_value_child_count(root) != 6u) {
+        asn1_value_free(root);
         return USM_ERROR_INVALID;
     }
     for (size_t i = 0u; i < 6u; ++i)
-        children[i] = salts_asn1_value_child_at(root, i);
+        children[i] = asn1_value_child_at(root, i);
 
     /* 1. msgAuthoritativeEngineID - OCTET STRING */
-    if (salts_asn1_value_get_tag(children[0], &tag_class, &constructed,
+    if (asn1_value_get_tag(children[0], &tag_class, &constructed,
                                  &tag_number) != SALTS_ASN1_OK ||
         tag_class != 0u || constructed || tag_number != 4u ||
-        salts_asn1_value_get_content(children[0], &content, &content_size) !=
+        asn1_value_get_content(children[0], &content, &content_size) !=
             SALTS_ASN1_OK) {
-        salts_asn1_value_free(root);
+        asn1_value_free(root);
         return USM_ERROR_INVALID;
     }
     params->engine_id_len = content_size;
@@ -649,7 +649,7 @@ int usm_decode_security_params(
         engine_id_copy = mem_pool ? (uint8_t *)pool_alloc(mem_pool, params->engine_id_len)
                                   : (uint8_t *)malloc(params->engine_id_len);
         if (!engine_id_copy) {
-            salts_asn1_value_free(root);
+            asn1_value_free(root);
             return USM_ERROR_INVALID;
         }
         memcpy(engine_id_copy, content, params->engine_id_len);
@@ -657,30 +657,30 @@ int usm_decode_security_params(
     params->authoritative_engine_id = engine_id_copy;
 
     /* 2. msgAuthoritativeEngineBoots - INTEGER */
-    if (salts_asn1_value_get_integer_i64(children[1], &integer) !=
+    if (asn1_value_get_integer_i64(children[1], &integer) !=
             SALTS_ASN1_OK ||
         integer < 0 || integer > INT32_MAX) {
-        salts_asn1_value_free(root);
+        asn1_value_free(root);
         return USM_ERROR_INVALID;
     }
     params->engine_boots = (uint32_t)integer;
 
     /* 3. msgAuthoritativeEngineTime - INTEGER */
-    if (salts_asn1_value_get_integer_i64(children[2], &integer) !=
+    if (asn1_value_get_integer_i64(children[2], &integer) !=
             SALTS_ASN1_OK ||
         integer < 0 || integer > INT32_MAX) {
-        salts_asn1_value_free(root);
+        asn1_value_free(root);
         return USM_ERROR_INVALID;
     }
     params->engine_time = (uint32_t)integer;
 
     /* 4. msgUserName - OCTET STRING */
-    if (salts_asn1_value_get_tag(children[3], &tag_class, &constructed,
+    if (asn1_value_get_tag(children[3], &tag_class, &constructed,
                                  &tag_number) != SALTS_ASN1_OK ||
         tag_class != 0u || constructed || tag_number != 4u ||
-        salts_asn1_value_get_content(children[3], &content, &content_size) !=
+        asn1_value_get_content(children[3], &content, &content_size) !=
             SALTS_ASN1_OK || content_size > 32u) {
-        salts_asn1_value_free(root);
+        asn1_value_free(root);
         return USM_ERROR_INVALID;
     }
     /* Need null-terminated string */
@@ -688,7 +688,7 @@ int usm_decode_security_params(
     char *user_name_str =
         mem_pool ? (char *)pool_alloc(mem_pool, user_name_len + 1) : (char *)malloc(user_name_len + 1);
     if (!user_name_str) {
-        salts_asn1_value_free(root);
+        asn1_value_free(root);
         return USM_ERROR_INVALID;
     }
     memcpy(user_name_str, content, user_name_len);
@@ -696,30 +696,30 @@ int usm_decode_security_params(
     params->user_name = user_name_str;
 
     /* 5. msgAuthenticationParameters - OCTET STRING */
-    if (salts_asn1_value_get_tag(children[4], &tag_class, &constructed,
+    if (asn1_value_get_tag(children[4], &tag_class, &constructed,
                                  &tag_number) != SALTS_ASN1_OK ||
         tag_class != 0u || constructed || tag_number != 4u ||
-        salts_asn1_value_get_content(children[4], &content, &content_size) !=
+        asn1_value_get_content(children[4], &content, &content_size) !=
             SALTS_ASN1_OK || content_size > sizeof(params->auth_params)) {
-        salts_asn1_value_free(root);
+        asn1_value_free(root);
         return USM_ERROR_INVALID;
     }
     memset(params->auth_params, 0, sizeof(params->auth_params));
     if (content_size > 0u) memcpy(params->auth_params, content, content_size);
 
     /* 6. msgPrivacyParameters - OCTET STRING */
-    if (salts_asn1_value_get_tag(children[5], &tag_class, &constructed,
+    if (asn1_value_get_tag(children[5], &tag_class, &constructed,
                                  &tag_number) != SALTS_ASN1_OK ||
         tag_class != 0u || constructed || tag_number != 4u ||
-        salts_asn1_value_get_content(children[5], &content, &content_size) !=
+        asn1_value_get_content(children[5], &content, &content_size) !=
             SALTS_ASN1_OK || content_size > sizeof(params->priv_params)) {
-        salts_asn1_value_free(root);
+        asn1_value_free(root);
         return USM_ERROR_INVALID;
     }
     memset(params->priv_params, 0, sizeof(params->priv_params));
     if (content_size > 0u) memcpy(params->priv_params, content, content_size);
 
-    salts_asn1_value_free(root);
+    asn1_value_free(root);
     return USM_OK;
 }
 
@@ -727,7 +727,7 @@ int usm_decode_security_params(
  * Get current timestamp in milliseconds
  */
 static uint64_t get_current_time_ms(void) {
-    return cmeta_monotonic_ms();
+    return monotonic_ms();
 }
 
 /*

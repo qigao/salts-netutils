@@ -13,10 +13,10 @@
 #ifndef EMAIL_SMTP_H
 #define EMAIL_SMTP_H
 
-#include "platform.h"
+#include <core/platform.h>
 #include "email_message.h"
-#include "tstr.h"
-#include <salts/error_codes.h>
+#include <core/tstr.h>
+#include <core/error_codes.h>
 #include <stddef.h>
 
 #ifdef __cplusplus
@@ -50,9 +50,10 @@ typedef struct smtp_client_s smtp_client_t;
 
 /**
  * Create a synchronous SMTP client with copied configuration strings.
+ * The first connection initializes CNet on the calling progress thread.
  *
  * @param config Required host, port, TLS mode, credentials, and timeout policy.
- * @return Owned client, or NULL for invalid configuration or allocation/runtime failure.
+ * @return Owned client, or NULL for invalid configuration or allocation failure.
  */
 smtp_client_t *smtp_client_create(const smtp_config_t *config);
 

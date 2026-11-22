@@ -1,7 +1,7 @@
 #include "salts_lb_sg.h"
 #include "salts_lb_host.h"
 #include "sg_host.h"
-#include <salts/error_codes.h>
+#include <core/error_codes.h>
 
 static int salts_lb_sg_create_owner(const void *config, native_io_backend *backend,
                                       cnet_handoff *credits, void **out) {

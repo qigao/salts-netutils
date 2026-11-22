@@ -10,7 +10,7 @@ target_include_directories(
   SaltsTCPProxy
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
          $<INSTALL_INTERFACE:include>)
-target_link_libraries(SaltsTCPProxy PUBLIC Salts::CNet Salts::CMeta PRIVATE Salts::Core saltsnet_sg_host)
+target_link_libraries(SaltsTCPProxy PUBLIC Salts::CNet CMeta::CMeta PRIVATE Salts::Core saltsnet_sg_host)
 
 install(
   TARGETS SaltsTCPProxy

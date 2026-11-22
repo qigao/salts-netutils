@@ -1,7 +1,7 @@
 #include "ice_cnet_datagram.h"
 #include "tinytest.h"
 
-#include <salts/error_codes.h>
+#include <core/error_codes.h>
 
 #include <stdint.h>
 #include <string.h>

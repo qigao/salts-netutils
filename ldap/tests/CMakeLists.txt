@@ -14,7 +14,7 @@ set_target_properties(test_ldap PROPERTIES FOLDER ldap)
 
 add_executable(test_ldap_cnet test_ldap_cnet.c)
 
-target_link_libraries(test_ldap_cnet PRIVATE ldap_client Salts::Platform
+target_link_libraries(test_ldap_cnet PRIVATE ldap_client Salts::Core
                                                Salts::TinyTest)
 
 target_include_directories(test_ldap_cnet

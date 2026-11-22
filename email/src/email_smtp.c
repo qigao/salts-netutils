@@ -1,9 +1,9 @@
 #include "email/email_smtp.h"
-#include "base64_utils.h"
+#include <core/base64.h>
 #include "email_cnet_transport.h"
 #include <ctype.h>
-#include <fmt.h>
-#include <salts/error_codes.h>
+#include <core/fmt.h>
+#include <core/error_codes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

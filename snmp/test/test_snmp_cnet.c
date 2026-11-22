@@ -17,7 +17,7 @@ typedef int snmp_test_socket_t;
 #include "snmp_builder_internal.h"
 #include "tinytest.h"
 
-#include <salts/thread.h>
+#include <threads/threads.h>
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -371,7 +371,7 @@ static snmp_test_exchange_t snmp_test_exchange(snmp_test_agent_behavior_t behavi
   snmp_test_exchange_t exchange = {.status = SNMP_CLIENT_ERROR_NETWORK,
                                    .agent_status = -1};
   snmp_test_agent_t agent;
-  cmeta_thread_t thread = NULL;
+  sync_thread_t thread = NULL;
   snmp_client_t *client = NULL;
   snmp_message_t response;
   snmp_oid_t oid = {0};
@@ -380,7 +380,7 @@ static snmp_test_exchange_t snmp_test_exchange(snmp_test_agent_behavior_t behavi
   if (snmp_test_agent_open(&agent, &port) != 0) return exchange;
   agent.behavior = behavior;
   agent.expected_request_type = request_type;
-  if (cmeta_thread_create(&thread, snmp_test_agent_run, &agent) != 0) {
+  if (sync_thread_create(&thread, snmp_test_agent_run, &agent) != 0) {
     snmp_test_agent_close(&agent);
     return exchange;
   }
@@ -421,12 +421,12 @@ static snmp_test_exchange_t snmp_test_exchange(snmp_test_agent_behavior_t behavi
 
   snmp_client_destroy(client);
   snmp_oid_free(&oid);
-  if (cmeta_thread_join(&thread) != 0 || agent.status != 0) {
+  if (sync_thread_join(&thread) != 0 || agent.status != 0) {
     exchange.status = SNMP_CLIENT_ERROR_NETWORK;
   }
   exchange.agent_status = agent.status;
   exchange.request_count = agent.request_count;
-  cmeta_thread_destroy(&thread);
+  sync_thread_destroy(&thread);
   snmp_test_agent_close(&agent);
   return exchange;
 }
@@ -439,7 +439,7 @@ static snmp_test_v3_exchange_t snmp_test_v3_exchange(
                                       .agent_status = -1};
   snmp_test_agent_t socket_owner;
   snmp_test_v3_agent_t agent;
-  cmeta_thread_t thread = NULL;
+  sync_thread_t thread = NULL;
   snmp_client_t *client = NULL;
   snmp_oid_t oid = {0};
   snmp_message_t response;
@@ -454,7 +454,7 @@ static snmp_test_v3_exchange_t snmp_test_v3_exchange(
   agent.security_name = authenticated ? "authuser" : "public";
   agent.response_time_offset = response_time_offset;
   agent.expected_request_type = request_type;
-  if (cmeta_thread_create(&thread, snmp_test_v3_agent_run, &agent) != 0) {
+  if (sync_thread_create(&thread, snmp_test_v3_agent_run, &agent) != 0) {
     snmp_test_agent_close(&socket_owner);
     return exchange;
   }
@@ -492,8 +492,8 @@ static snmp_test_v3_exchange_t snmp_test_v3_exchange(
   }
   snmp_client_destroy(client);
   snmp_oid_free(&oid);
-  if (cmeta_thread_join(&thread) == 0) exchange.agent_status = agent.status;
-  cmeta_thread_destroy(&thread);
+  if (sync_thread_join(&thread) == 0) exchange.agent_status = agent.status;
+  sync_thread_destroy(&thread);
   snmp_test_agent_close(&socket_owner);
   return exchange;
 }
@@ -517,7 +517,7 @@ static snmp_test_walk_result_t snmp_test_walk_sequence(void) {
                                     .callback_count = 0,
                                     .agent_status = -1};
   snmp_test_agent_t agent;
-  cmeta_thread_t thread = NULL;
+  sync_thread_t thread = NULL;
   snmp_client_t *client = NULL;
   snmp_oid_t root = {0};
   uint16_t port = 0u;
@@ -525,7 +525,7 @@ static snmp_test_walk_result_t snmp_test_walk_sequence(void) {
   if (snmp_test_agent_open(&agent, &port) != 0) return result;
   agent.behavior = SNMP_TEST_AGENT_WALK_SEQUENCE;
   agent.expected_request_type = SNMP_PDU_GET_NEXT_REQUEST;
-  if (cmeta_thread_create(&thread, snmp_test_walk_agent_run, &agent) != 0) {
+  if (sync_thread_create(&thread, snmp_test_walk_agent_run, &agent) != 0) {
     snmp_test_agent_close(&agent);
     return result;
   }
@@ -547,15 +547,15 @@ static snmp_test_walk_result_t snmp_test_walk_sequence(void) {
 
   snmp_client_destroy(client);
   snmp_oid_free(&root);
-  if (cmeta_thread_join(&thread) == 0) result.agent_status = agent.status;
-  cmeta_thread_destroy(&thread);
+  if (sync_thread_join(&thread) == 0) result.agent_status = agent.status;
+  sync_thread_destroy(&thread);
   snmp_test_agent_close(&agent);
   return result;
 }
 
 static int snmp_test_walk_to_end_of_mib(void) {
   snmp_test_agent_t agent;
-  cmeta_thread_t thread = NULL;
+  sync_thread_t thread = NULL;
   snmp_client_t *client = NULL;
   snmp_oid_t root = {0};
   uint16_t port = 0u;
@@ -564,7 +564,7 @@ static int snmp_test_walk_to_end_of_mib(void) {
   if (snmp_test_agent_open(&agent, &port) != 0) return -1;
   agent.behavior = SNMP_TEST_AGENT_END_OF_MIB;
   agent.expected_request_type = SNMP_PDU_GET_NEXT_REQUEST;
-  if (cmeta_thread_create(&thread, snmp_test_agent_run, &agent) != 0) {
+  if (sync_thread_create(&thread, snmp_test_agent_run, &agent) != 0) {
     snmp_test_agent_close(&agent);
     return -1;
   }
@@ -584,8 +584,8 @@ static int snmp_test_walk_to_end_of_mib(void) {
 
   snmp_client_destroy(client);
   snmp_oid_free(&root);
-  if (cmeta_thread_join(&thread) != 0 || agent.status != 0) walk_count = -1;
-  cmeta_thread_destroy(&thread);
+  if (sync_thread_join(&thread) != 0 || agent.status != 0) walk_count = -1;
+  sync_thread_destroy(&thread);
   snmp_test_agent_close(&agent);
   return walk_count;
 }

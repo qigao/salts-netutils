@@ -19,7 +19,7 @@ typedef int stun_test_socket_t;
 
 
 
-#include <salts/thread.h>
+#include <threads/threads.h>
 
 #include <stdint.h>
 #include <string.h>

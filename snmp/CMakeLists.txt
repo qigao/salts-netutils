@@ -25,8 +25,8 @@ target_include_directories(
 # Link dependencies
 target_link_libraries(
   ${TARGET_NAME}
-  PUBLIC Salts::Core Salts::CMeta
-  PRIVATE Salts::CNet Salts::ASN1)
+  PUBLIC Salts::Core CMeta::CMeta
+  PRIVATE Salts::CNet Salts::ASN1 Salts::Crypto)
 
 set_target_properties(
   ${TARGET_NAME}

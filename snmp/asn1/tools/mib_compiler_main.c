@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fmt.h>
+#include <core/fmt.h>
 #include "mib_compiler.h"
 
 void print_usage(const char *program_name) {

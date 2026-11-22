@@ -6,7 +6,7 @@
 #include "mime_parser.h"
 #include "tinytest.h"
 #include <string.h>
-#include "cmeta_buffer.h"
+#include <memory/buffer.h>
 /* ── Test helpers ──────────────────────────────────────────────────── */
 
 typedef struct {

@@ -5,7 +5,7 @@
 
 #include "snmp_parser.h"
 #include "snmp_builder.h"
-#include "memory_pool.h"
+#include <memory/memory_pool.h>
 #include "tinytest.h"
 #include <string.h>
 #include <stdio.h>

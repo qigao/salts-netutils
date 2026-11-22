@@ -9,9 +9,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_FIND_USE_PACKAGE_REGISTRY": false,
-        "CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY": false,
-        "VCPKG_MANIFEST_MODE": true,
-        "VCPKG_APPLOCAL_DEPS": false
+        "CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY": false
       }
     }
   ]

@@ -4,9 +4,9 @@
 #include "salts_ice_internal.h"
 #include <cnet/destination_policy.h>
 #include <cnet/sg_host.h>
-#include <cmeta_buffer.h>
-#include <salts/clock.h>
-#include <salts/thread.h>
+#include <memory/buffer.h>
+#include <core/clock.h>
+#include <threads/threads.h>
 #include <tinytest.h>
 #include <string.h>
 #include <stdlib.h>
@@ -136,13 +136,13 @@ static int sg_pump(native_io_sharded_context *context, udp_lane *lane) {
 #define SG_REQUIRE(expr) do { if (!(expr)) { \
   lane->failed_line = __LINE__; sg_record(lane, SALTS_EPROTO); goto cleanup; } } while (0)
 #define SG_UNTIL(expr) do { while (!(expr)) { \
-  if (cmeta_monotonic_ms() >= deadline) { sg_record(lane, SALTS_ETIMEDOUT); goto cleanup; } \
+  if (monotonic_ms() >= deadline) { sg_record(lane, SALTS_ETIMEDOUT); goto cleanup; } \
   SG_OK(sg_pump(context, lane)); } } while (0)
 
 static int sg_binding(native_io_sharded_context *context, udp_lane *lane,
                        const cnet_datagram_peer *destination, bool respond) {
-  const uint64_t deadline = cmeta_monotonic_ms() + SG_TIMEOUT_MS;
-  uint64_t now = cmeta_monotonic_ms(), tag = 0u;
+  const uint64_t deadline = monotonic_ms() + SG_TIMEOUT_MS;
+  uint64_t now = monotonic_ms(), tag = 0u;
   stun_binding_transaction binding = {0};
   stun_transaction_id_t first_id;
   cnet_datagram_peer actual;
@@ -167,7 +167,7 @@ static int sg_binding(native_io_sharded_context *context, udp_lane *lane,
   lane->received = 0u;
   SG_OK(sg_send(lane, lane->outbound, tcp_during_stun, sizeof(tcp_during_stun)));
   while (lane->received != sizeof(tcp_during_stun)) {
-    SG_REQUIRE(cmeta_monotonic_ms() < deadline);
+    SG_REQUIRE(monotonic_ms() < deadline);
     SG_OK(sg_pump(context, lane));
     SG_REQUIRE(stun_binding_transaction_advance(&binding, now) == SALTS_EBUSY);
     SG_REQUIRE(binding.attempt == 1u);
@@ -216,7 +216,7 @@ cleanup:
 
 static int sg_retained_cleanup(native_io_sharded_context *context, udp_lane *lane,
                                 const cnet_datagram_peer *destination, bool unpublished) {
-  const uint64_t deadline = cmeta_monotonic_ms() + SG_TIMEOUT_MS;
+  const uint64_t deadline = monotonic_ms() + SG_TIMEOUT_MS;
   ice_config_t config = ice_default_config();
   uint64_t tag;
   bool stopped = false;
@@ -245,7 +245,7 @@ static int sg_retained_cleanup(native_io_sharded_context *context, udp_lane *lan
     SG_REQUIRE(lane->cleanup_agent->local_candidate_runtime[1].socket == lane->cleanup_udp);
   }
   while (!stopped) {
-    SG_REQUIRE(cmeta_monotonic_ms() < deadline);
+    SG_REQUIRE(monotonic_ms() < deadline);
     SG_OK(sg_pump(context, lane));
     status = ice_cnet_datagram_stop_external(lane->cleanup_udp, &stopped);
     SG_REQUIRE(status == SALTS_OK || status == SALTS_EBUSY);
@@ -260,7 +260,7 @@ cleanup:
 
 static void sg_run(native_io_sharded_context *context, void *user) {
   udp_lane *lane = (udp_lane *)user;
-  const uint64_t deadline = cmeta_monotonic_ms() + SG_TIMEOUT_MS;
+  const uint64_t deadline = monotonic_ms() + SG_TIMEOUT_MS;
   cnet_client_config config = {sg_backend(), 2u, 8u, 16u, SG_BATCH, 16u,
                                 SG_PACKET, SG_PACKET, SG_TIMEOUT_MS, 0u, SG_TIMEOUT_MS};
   cnet_listener_config listener = {sg_backend(), "127.0.0.1", 0u, 2u};
@@ -347,7 +347,7 @@ static void sg_run(native_io_sharded_context *context, void *user) {
   do {
     status = cnet_listener_accept(&lane->listener, &lane->tcp, &observer, &lane->inbound);
     if (status == SALTS_OK) break;
-    SG_REQUIRE(status == SALTS_ETIMEDOUT && cmeta_monotonic_ms() < deadline);
+    SG_REQUIRE(status == SALTS_ETIMEDOUT && monotonic_ms() < deadline);
     SG_OK(sg_pump(context, lane));
   } while (true);
   SG_UNTIL(lane->connected == 2u);
@@ -361,7 +361,7 @@ static void sg_run(native_io_sharded_context *context, void *user) {
     status = ice_cnet_datagram_stop_external(&lane->udp[0], &stopped);
     SG_REQUIRE(status == SALTS_OK || status == SALTS_EBUSY);
     if (stopped) break;
-    SG_REQUIRE(cmeta_monotonic_ms() < deadline);
+    SG_REQUIRE(monotonic_ms() < deadline);
     SG_OK(sg_pump(context, lane));
   }
   stopped = false;
@@ -371,7 +371,7 @@ static void sg_run(native_io_sharded_context *context, void *user) {
   SG_OK(ice_cnet_datagram_init_external(&lane->udp[0], "127.0.0.1", 0u,
                                         SG_PACKET, lane->backend));
   SG_OK(stun_binding_transaction_start(&canceled, &lane->udp[0], &destination,
-                                        1000u, 2u, cmeta_monotonic_ms()));
+                                        1000u, 2u, monotonic_ms()));
   tag = canceled.send_tag;
   SG_REQUIRE(stun_binding_transaction_cancel(&canceled) == SALTS_ECANCELED);
   SG_REQUIRE(canceled.phase == STUN_BINDING_DONE && lane->udp[0].send_pending);
@@ -387,7 +387,7 @@ static void sg_run(native_io_sharded_context *context, void *user) {
   SG_REQUIRE(ice_cnet_datagram_receive_begin(&lane->udp[0]) == SALTS_ESHUTDOWN);
   SG_REQUIRE(ice_cnet_datagram_send_begin(&lane->udp[0], &destination, "x", 1u, &rejected) == SALTS_ESHUTDOWN);
   while (!stopped) {
-    SG_REQUIRE(cmeta_monotonic_ms() < deadline);
+    SG_REQUIRE(monotonic_ms() < deadline);
     SG_OK(sg_pump(context, lane));
     status = ice_cnet_datagram_stop_external(&lane->udp[0], &stopped);
     SG_REQUIRE(status == SALTS_OK || status == SALTS_EBUSY);
@@ -426,8 +426,8 @@ cleanup:
     if (lane->inbound.slot) (void)cnet_close(&lane->tcp, lane->inbound);
   }
   if (lane->lease.generation) {
-    const uint64_t drain_deadline = cmeta_monotonic_ms() + SG_TIMEOUT_MS;
-    while (!sg_quiescent(lane) && cmeta_monotonic_ms() < drain_deadline) {
+    const uint64_t drain_deadline = monotonic_ms() + SG_TIMEOUT_MS;
+    while (!sg_quiescent(lane) && monotonic_ms() < drain_deadline) {
       if (lane->cleanup_agent) {
         bool cleanup_stopped = true;
         if (lane->cleanup_udp && lane->cleanup_udp->initialized) {

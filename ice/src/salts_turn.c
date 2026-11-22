@@ -15,10 +15,10 @@
 #include "ice/salts_turn.h"
 #include "ice_cnet_datagram.h"
 
-#include <fmt.h>
-#include <salts/clock.h>
-#include <salts/error_codes.h>
-#include <cmeta_crypto.h>
+#include <core/fmt.h>
+#include <core/clock.h>
+#include <core/error_codes.h>
+#include "../../internal/protocol_crypto.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -111,7 +111,7 @@ static int calculate_long_term_key(
     char concat[768];
     int len = fmt(concat, sizeof(concat), "{}:{}:{}", username, realm, password);
     if (len < 0 || len >= (int)sizeof(concat)) return -1;
-    return cmeta_md5(concat, (size_t)len, key_out) == SALTS_OK ? 0 : -1;
+    return salts_crypto_md5(concat, (size_t)len, key_out) == SALTS_OK ? 0 : -1;
 }
 
 static int calculate_turn_message_integrity(
@@ -119,9 +119,9 @@ static int calculate_turn_message_integrity(
     const char *username, const char *realm, const char *password,
     uint8_t *hmac_out
 ) {
-    uint8_t key[SALTS_MD5_DIGEST_BYTES];
+    uint8_t key[SALTS_CRYPTO_MD5_DIGEST_SIZE];
     if (calculate_long_term_key(username, realm, password, key) != 0) return -1;
-    return cmeta_hmac_sha1(key, sizeof(key), data, len, hmac_out) == SALTS_OK ? 0 : -1;
+    return saltsnet_hmac_sha1(key, sizeof(key), data, len, hmac_out) == SALTS_OK ? 0 : -1;
 }
 
 static int turn_validate_message_integrity(
@@ -131,7 +131,7 @@ static int turn_validate_message_integrity(
     const uint8_t *integrity = NULL;
     const uint8_t *integrity_header = NULL;
     size_t remaining;
-    uint8_t expected[SALTS_SHA1_DIGEST_BYTES];
+    uint8_t expected[SALTSNET_SHA1_DIGEST_SIZE];
     uint8_t *hmac_data;
     size_t hmac_data_len;
 
@@ -170,11 +170,7 @@ static int turn_validate_message_integrity(
         return -5;
     }
     free(hmac_data);
-    {
-        int equal = 0;
-        if (cmeta_crypto_equal(integrity, expected, sizeof(expected), &equal) != SALTS_OK) return -6;
-        return equal ? 0 : -6;
-    }
+    return salts_crypto_equal(integrity, expected, sizeof(expected)) == SALTS_CRYPTO_OK ? 0 : -6;
 }
 
 static int xor_encode_address(
@@ -254,7 +250,7 @@ static int turn_append_authentication(uint8_t *buffer, uint8_t **p, uint16_t mes
                                       const stun_transaction_id_t *txn_id,
                                       const char *username, const char *realm,
                                       const char *nonce, const char *password) {
-    uint8_t hmac[SALTS_SHA1_DIGEST_BYTES];
+    uint8_t hmac[SALTSNET_SHA1_DIGEST_SIZE];
     size_t attributes_length;
 
     *p = turn_write_string_attribute(*p, STUN_ATTR_USERNAME, username);
@@ -265,7 +261,7 @@ static int turn_append_authentication(uint8_t *buffer, uint8_t **p, uint16_t mes
     if (calculate_turn_message_integrity(buffer, STUN_HEADER_SIZE + attributes_length,
                                          username, realm, password, hmac) != 0) return -1;
     write_u16_be(*p, STUN_ATTR_MESSAGE_INTEGRITY);
-    write_u16_be(*p + 2, SALTS_SHA1_DIGEST_BYTES);
+    write_u16_be(*p + 2, SALTSNET_SHA1_DIGEST_SIZE);
     memcpy(*p + 4, hmac, sizeof(hmac));
     *p += 4u + sizeof(hmac);
     return 0;
@@ -666,7 +662,7 @@ static int turn_server_peer_matches(const salts_turn_client_t *tc,
 
 static int turn_receive_owned(salts_turn_client_t *tc, char **data_out, size_t *data_len_out,
                               uint32_t timeout_ms) {
-    const uint64_t deadline = cmeta_monotonic_ms() + timeout_ms;
+    const uint64_t deadline = monotonic_ms() + timeout_ms;
     char *data;
     if (!tc || !data_out || !data_len_out || timeout_ms == 0u) return SALTS_EINVAL;
     data = (char *)malloc(CNET_DATAGRAM_MAX_PAYLOAD_BYTES);
@@ -675,7 +671,7 @@ static int turn_receive_owned(salts_turn_client_t *tc, char **data_out, size_t *
     for (;;) {
         cnet_datagram_peer peer;
         size_t data_len = 0u;
-        const uint64_t now = cmeta_monotonic_ms();
+        const uint64_t now = monotonic_ms();
         const uint32_t remaining_ms = now < deadline ? (uint32_t)(deadline - now) : 0u;
         int rc;
         if (remaining_ms == 0u) {
@@ -705,9 +701,9 @@ static int turn_send_and_recv(salts_turn_client_t *tc,
                                 (uint32_t)tc->timeout_ms);
     if (rc != SALTS_OK) return rc;
 
-    deadline = cmeta_monotonic_ms() + (uint64_t)tc->timeout_ms;
+    deadline = monotonic_ms() + (uint64_t)tc->timeout_ms;
     for (;;) {
-        uint64_t now = cmeta_monotonic_ms();
+        uint64_t now = monotonic_ms();
         uint64_t remaining = (deadline > now) ? (deadline - now) : 0;
         char *data = NULL;
         size_t data_len = 0;
@@ -999,7 +995,7 @@ int turn_client_allocate(salts_turn_client_t *tc, turn_allocation_t *allocation_
     tc->allocation = alloc;
     if (tc->allocation.lifetime == 0) tc->allocation.lifetime = tc->requested_lifetime;
     tc->allocation_valid = 1;
-    tc->allocation_expires_at_ms = cmeta_monotonic_ms() +
+    tc->allocation_expires_at_ms = monotonic_ms() +
                                    (uint64_t)tc->allocation.lifetime * 1000ULL;
     *allocation_out = alloc;
     return 0;
@@ -1045,7 +1041,7 @@ int turn_client_refresh(salts_turn_client_t *tc) {
         if (rc != 0) return rc;
 
         tc->allocation.lifetime = lifetime;
-        tc->allocation_expires_at_ms = cmeta_monotonic_ms() + (uint64_t)lifetime * 1000ULL;
+        tc->allocation_expires_at_ms = monotonic_ms() + (uint64_t)lifetime * 1000ULL;
         return 0;
     }
     return -TURN_ERROR_STALE_NONCE;
@@ -1054,7 +1050,7 @@ int turn_client_refresh(salts_turn_client_t *tc) {
 int turn_client_create_permission(salts_turn_client_t *tc,
                                   const char *peer_ip, uint16_t peer_port) {
     if (!tc || !peer_ip || !tc->allocation_valid) return -1;
-    uint64_t now = cmeta_monotonic_ms();
+    uint64_t now = monotonic_ms();
     turn_channel_t *entry = turn_find_peer_entry(tc, peer_ip, peer_port, 0);
     int entry_index = entry ? (int)(entry - tc->channels) : -1;
     if (entry && tc->permission_expires_at_ms[entry_index] >
@@ -1100,7 +1096,7 @@ int turn_client_create_permission(salts_turn_client_t *tc,
     entry = turn_remember_peer_permission(tc, peer_ip, peer_port);
     if (!entry) return -3;
     entry_index = (int)(entry - tc->channels);
-    tc->permission_expires_at_ms[entry_index] = cmeta_monotonic_ms() +
+    tc->permission_expires_at_ms[entry_index] = monotonic_ms() +
                                                 (uint64_t)TURN_PERMISSION_LIFETIME * 1000ULL;
     return 0;
 }
@@ -1112,7 +1108,7 @@ int turn_client_channel_bind(salts_turn_client_t *tc,
 
     turn_channel_t *entry = turn_find_peer_entry(tc, peer_ip, peer_port, 0);
     int entry_index = entry ? (int)(entry - tc->channels) : -1;
-    uint64_t now = cmeta_monotonic_ms();
+    uint64_t now = monotonic_ms();
     if (entry && entry->active &&
         tc->channel_expires_at_ms[entry_index] > now + TURN_CHANNEL_REFRESH_MARGIN_MS) {
         if (channel_out) *channel_out = entry->channel_number;
@@ -1168,9 +1164,9 @@ int turn_client_channel_bind(salts_turn_client_t *tc,
 
     entry->channel_number = channel;
     entry->active = 1;
-    tc->permission_expires_at_ms[entry_index] = cmeta_monotonic_ms() +
+    tc->permission_expires_at_ms[entry_index] = monotonic_ms() +
                                                 (uint64_t)TURN_PERMISSION_LIFETIME * 1000ULL;
-    tc->channel_expires_at_ms[entry_index] = cmeta_monotonic_ms() +
+    tc->channel_expires_at_ms[entry_index] = monotonic_ms() +
                                              (uint64_t)TURN_CHANNEL_LIFETIME * 1000ULL;
     if (channel_out) *channel_out = channel;
     return 0;
@@ -1271,11 +1267,11 @@ int turn_client_maintain(salts_turn_client_t *tc) {
     int rc;
 
     if (!tc || !tc->allocation_valid) return -1;
-    now = cmeta_monotonic_ms();
+    now = monotonic_ms();
     if (tc->allocation_expires_at_ms <= now + TURN_ALLOCATION_REFRESH_MARGIN_MS) {
         rc = turn_client_refresh(tc);
         if (rc != 0) return rc;
-        now = cmeta_monotonic_ms();
+        now = monotonic_ms();
     }
 
     for (int i = 0; i < tc->channel_count; ++i) {

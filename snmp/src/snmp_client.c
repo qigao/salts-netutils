@@ -6,10 +6,10 @@
 #include "snmp_client.h"
 #include "snmp_builder_internal.h"
 #include <cnet/cnet.h>
-#include "memory_pool.h"
-#include <salts/clock.h>
-#include <salts/error_codes.h>
-#include <cmeta_buffer.h>
+#include <memory/memory_pool.h>
+#include <core/clock.h>
+#include <core/error_codes.h>
+#include <memory/buffer.h>
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -159,9 +159,9 @@ static void snmp_client_on_send(void *user, cnet_connection connection, size_t s
 
 static int snmp_client_poll_until_connected(snmp_client_t *client) {
     const uint32_t timeout_ms = snmp_client_effective_timeout(client);
-    const uint64_t deadline = cmeta_monotonic_ms() + timeout_ms;
+    const uint64_t deadline = monotonic_ms() + timeout_ms;
     while (!client->connected && !client->terminal) {
-        const uint64_t now = cmeta_monotonic_ms();
+        const uint64_t now = monotonic_ms();
         size_t events = 0u;
         uint32_t wait_ms;
         int status;
@@ -387,7 +387,7 @@ static int send_request_and_wait(
 
     for (;;) {
         const uint32_t timeout_ms = snmp_client_effective_timeout(client);
-        const uint64_t deadline = cmeta_monotonic_ms() + timeout_ms;
+        const uint64_t deadline = monotonic_ms() + timeout_ms;
         int status;
 
         client->response_ready = 0;
@@ -412,7 +412,7 @@ static int send_request_and_wait(
 
         for (;;) {
             while (!client->response_ready && !client->terminal) {
-                const uint64_t now = cmeta_monotonic_ms();
+                const uint64_t now = monotonic_ms();
                 size_t events = 0u;
                 uint32_t wait_ms;
                 if (now >= deadline) break;
@@ -482,7 +482,7 @@ static int send_request_and_wait(
 
             snmp_client_release_response(client);
             last_failure = SNMP_CLIENT_ERROR_RESPONSE;
-            if (cmeta_monotonic_ms() >= deadline) break;
+            if (monotonic_ms() >= deadline) break;
             status = cnet_receive(&client->net, client->connection, 1u);
             if (status != SALTS_OK) {
                 snmp_client_set_transport_error(client, "receive admission", status);

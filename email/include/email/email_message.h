@@ -12,9 +12,9 @@
 #ifndef EMAIL_MESSAGE_H
 #define EMAIL_MESSAGE_H
 
-#include "platform.h"
-#include "cmeta_buffer.h"
-#include "tstr.h"
+#include <core/platform.h>
+#include <memory/buffer.h>
+#include <core/tstr.h>
 #include "mime_parser.h"
 #include "mime_rfc2822.h"
 #include <stddef.h>

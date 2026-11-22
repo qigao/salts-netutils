@@ -2,10 +2,10 @@
 #include "salts_tcp_proxy_host.h"
 #include <cnet/manager.h>
 
-#include <base64_utils.h>
-#include <salts/error_codes.h>
+#include <core/base64.h>
+#include <core/error_codes.h>
 #include <cnet/destination_policy.h>
-#include <cmeta_buffer.h>
+#include <memory/buffer.h>
 
 #include <limits.h>
 #include <stdio.h>

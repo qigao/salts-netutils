@@ -1,6 +1,6 @@
 #include <cnet/cnet.h>
-#include <salts/error_codes.h>
-#include <cmeta_buffer.h>
+#include <core/error_codes.h>
+#include <memory/buffer.h>
 
 #include <signal.h>
 #include <stdint.h>

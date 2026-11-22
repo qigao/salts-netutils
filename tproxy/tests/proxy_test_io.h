@@ -16,7 +16,7 @@ typedef int proxy_test_socket_t;
   #define PROXY_TEST_INVALID_SOCKET (-1)
 #endif
 
-#include <salts/thread.h>
+#include <threads/threads.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <stdbool.h>

@@ -23,8 +23,8 @@ target_include_directories(
 
 target_link_libraries(
   SaltsICE
-  PUBLIC Salts::CNet Salts::CMeta
-  PRIVATE Salts::Core Threads::Threads)
+  PUBLIC Salts::CNet CMeta::CMeta Salts::Core
+  PRIVATE Salts::Crypto Threads::Threads)
 if(WIN32)
   target_link_libraries(SaltsICE PRIVATE ws2_32 iphlpapi psapi)
 endif()
@@ -63,7 +63,7 @@ if(BUILD_TESTING)
   target_include_directories(test_ice_cnet_sg PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
   target_link_libraries(test_ice_cnet_sg PRIVATE
-    SaltsNet::ICE Salts::CNet Salts::Core Salts::TinyTest)
+    SaltsNet::ICE Salts::CNet Salts::Core Salts::Crypto Salts::TinyTest)
   if(WIN32)
     target_link_libraries(test_ice_cnet_sg PRIVATE ws2_32)
   endif()
@@ -86,7 +86,7 @@ if(BUILD_TESTING)
     src/stun_request.c)
   target_include_directories(test_stun_cnet PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
                                                     ${CMAKE_CURRENT_SOURCE_DIR}/src)
-  target_link_libraries(test_stun_cnet PRIVATE Salts::CNet Salts::Core Salts::TinyTest)
+  target_link_libraries(test_stun_cnet PRIVATE Salts::CNet Salts::Core Salts::Crypto Salts::TinyTest)
   if(WIN32)
     target_link_libraries(test_stun_cnet PRIVATE ws2_32)
   endif()
@@ -96,7 +96,7 @@ if(BUILD_TESTING)
   add_executable(test_stun tests/test_stun.c src/ice_cnet_datagram.c src/salts_stun.c)
   target_include_directories(test_stun PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
                                                ${CMAKE_CURRENT_SOURCE_DIR}/src)
-  target_link_libraries(test_stun PRIVATE Salts::CNet Salts::Core Salts::TinyTest)
+  target_link_libraries(test_stun PRIVATE Salts::CNet Salts::Core Salts::Crypto Salts::TinyTest)
   if(WIN32)
     target_link_libraries(test_stun PRIVATE ws2_32)
   endif()
@@ -107,7 +107,7 @@ if(BUILD_TESTING)
                                        src/salts_turn.c)
   target_include_directories(test_turn PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
                                                ${CMAKE_CURRENT_SOURCE_DIR}/src)
-  target_link_libraries(test_turn PRIVATE Salts::CNet Salts::Core Salts::TinyTest)
+  target_link_libraries(test_turn PRIVATE Salts::CNet Salts::Core Salts::Crypto Salts::TinyTest)
   if(WIN32)
     target_link_libraries(test_turn PRIVATE ws2_32)
   endif()

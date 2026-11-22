@@ -3,9 +3,9 @@
 #include "salts_tcp_proxy_sg.h"
 #include "tinytest.h"
 
-#include <salts/clock.h>
-#include <salts/error_codes.h>
-#include <salts/thread.h>
+#include <core/clock.h>
+#include <core/error_codes.h>
+#include <threads/threads.h>
 
 #include <stdatomic.h>
 #include <stdio.h>
@@ -63,7 +63,7 @@ static void proxy_test_client_run(void *user) {
     char request[256];
     int request_size;
     if (proxy_test_send_all(socket_value, "CON", 3u) != 0) goto done;
-    cmeta_sleep_ms(30u);
+    sleep_ms(30u);
     request_size = snprintf(request, sizeof(request),
                             "NECT 127.0.0.1:%u HTTP/1.1\r\n"
                             "Proxy-Authorization: Basic dXNlcjpwYXNz\r\n\r\nsalts-net",
@@ -130,8 +130,8 @@ static const char *proxy_test_route(const salts_tcp_proxy_route_request_t *reque
 }
 
 static int proxy_test_poll_until(salts_tcp_proxy_t *proxy, proxy_test_client_t *client) {
-  const uint64_t deadline = cmeta_monotonic_ms() + PROXY_TEST_TIMEOUT_MS;
-  while (cmeta_monotonic_ms() < deadline) {
+  const uint64_t deadline = monotonic_ms() + PROXY_TEST_TIMEOUT_MS;
+  while (monotonic_ms() < deadline) {
     size_t events = 0u;
     if (salts_tcp_proxy_poll(proxy, 10u, &events) != SALTS_OK) return -1;
     if (atomic_load_explicit(&client->done, memory_order_acquire)) return 0;
@@ -144,8 +144,8 @@ static void proxy_test_run_with_owner(salts_tcp_proxy_config_t *config, proxy_te
   salts_tcp_proxy_t *proxy;
   proxy_test_echo_t echo = {.listener = PROXY_TEST_INVALID_SOCKET};
   proxy_test_client_t client = {.kind = kind};
-  cmeta_thread_t echo_thread = NULL;
-  cmeta_thread_t client_thread = NULL;
+  sync_thread_t echo_thread = NULL;
+  sync_thread_t client_thread = NULL;
   char raw_uri[64];
   salts_tcp_proxy_upstream_t upstreams[2] = {0};
   proxy_test_route_t route = {{0}, 0, SALTS_PROXY_PROTOCOL_AUTO, 0u};
@@ -155,7 +155,7 @@ static void proxy_test_run_with_owner(salts_tcp_proxy_config_t *config, proxy_te
   if (needs_echo) {
     echo.listener = proxy_test_echo_listener(&echo.port);
     check(echo.listener != PROXY_TEST_INVALID_SOCKET);
-    check_equal(cmeta_thread_create(&echo_thread, proxy_test_echo_run, &echo), SALTS_OK);
+    check_equal(sync_thread_create(&echo_thread, proxy_test_echo_run, &echo), SALTS_OK);
   }
   if (config->protocol == SALTS_PROXY_PROTOCOL_RAW) {
     check(snprintf(raw_uri, sizeof(raw_uri), "tcp://127.0.0.1:%u", (unsigned int)echo.port) > 0);
@@ -181,16 +181,16 @@ static void proxy_test_run_with_owner(salts_tcp_proxy_config_t *config, proxy_te
   check_equal(salts_tcp_proxy_listen(proxy, "127.0.0.1", 0u), SALTS_OK);
   check_equal(salts_tcp_proxy_port(proxy, &client.proxy_port), SALTS_OK);
   client.backend_port = config->route == proxy_test_route ? 1u : (echo.port ? echo.port : 443u);
-  check_equal(cmeta_thread_create(&client_thread, proxy_test_client_run, &client), SALTS_OK);
+  check_equal(sync_thread_create(&client_thread, proxy_test_client_run, &client), SALTS_OK);
   check_equal(proxy_test_poll_until(proxy, &client), 0);
   check_equal(salts_tcp_proxy_stop(proxy), SALTS_OK);
   check_equal(salts_tcp_proxy_stop(proxy), SALTS_OK);
   check_equal(salts_tcp_proxy_destroy(proxy), SALTS_OK);
-  check_equal(cmeta_thread_join(&client_thread), SALTS_OK);
-  cmeta_thread_destroy(&client_thread);
+  check_equal(sync_thread_join(&client_thread), SALTS_OK);
+  sync_thread_destroy(&client_thread);
   if (echo_thread) {
-    check_equal(cmeta_thread_join(&echo_thread), SALTS_OK);
-    cmeta_thread_destroy(&echo_thread);
+    check_equal(sync_thread_join(&echo_thread), SALTS_OK);
+    sync_thread_destroy(&echo_thread);
     check_equal(echo.status, 0);
   }
   if (config->route == proxy_test_route) {
@@ -249,9 +249,9 @@ static const char *proxy_test_reentrant_route(const salts_tcp_proxy_route_reques
 static void proxy_test_run_upstream_isolation(void) {
   salts_tcp_proxy_config_t config = salts_tcp_proxy_config_default();
   proxy_test_echo_t echo = {.listener = PROXY_TEST_INVALID_SOCKET};
-  cmeta_thread_t echo_thread = NULL;
-  cmeta_thread_t failed_thread = NULL;
-  cmeta_thread_t healthy_thread = NULL;
+  sync_thread_t echo_thread = NULL;
+  sync_thread_t failed_thread = NULL;
+  sync_thread_t healthy_thread = NULL;
   proxy_test_client_t failed = {.kind = PROXY_TEST_SOCKS_REJECT};
   proxy_test_client_t healthy = {.kind = PROXY_TEST_SOCKS};
   salts_tcp_proxy_t *proxy;
@@ -263,7 +263,7 @@ static void proxy_test_run_upstream_isolation(void) {
   atomic_init(&healthy.done, 0);
   echo.listener = proxy_test_echo_listener(&echo.port);
   check(echo.listener != PROXY_TEST_INVALID_SOCKET);
-  check_equal(cmeta_thread_create(&echo_thread, proxy_test_echo_run, &echo), SALTS_OK);
+  check_equal(sync_thread_create(&echo_thread, proxy_test_echo_run, &echo), SALTS_OK);
   check(snprintf(healthy_uri, sizeof(healthy_uri), "tcp://127.0.0.1:%u",
                  (unsigned int)echo.port) > 0);
 
@@ -285,26 +285,26 @@ static void proxy_test_run_upstream_isolation(void) {
   /* First RR target deliberately refuses connect. CNet must surface a
    * SOCKS failure; the healthy peer is not an implicit fallback. */
   failed.backend_port = echo.port;
-  check_equal(cmeta_thread_create(&failed_thread, proxy_test_client_run, &failed), SALTS_OK);
+  check_equal(sync_thread_create(&failed_thread, proxy_test_client_run, &failed), SALTS_OK);
   check_equal(proxy_test_poll_until(proxy, &failed), 0);
-  check_equal(cmeta_thread_join(&failed_thread), SALTS_OK);
-  cmeta_thread_destroy(&failed_thread);
+  check_equal(sync_thread_join(&failed_thread), SALTS_OK);
+  sync_thread_destroy(&failed_thread);
   check_equal(failed.status, 0);
 
   /* A separate, newly admitted logical tunnel can use the second endpoint
    * without inheriting the first session's cancelled or retired context. */
   healthy.proxy_port = failed.proxy_port;
   healthy.backend_port = echo.port;
-  check_equal(cmeta_thread_create(&healthy_thread, proxy_test_client_run, &healthy), SALTS_OK);
+  check_equal(sync_thread_create(&healthy_thread, proxy_test_client_run, &healthy), SALTS_OK);
   check_equal(proxy_test_poll_until(proxy, &healthy), 0);
-  check_equal(cmeta_thread_join(&healthy_thread), SALTS_OK);
-  cmeta_thread_destroy(&healthy_thread);
+  check_equal(sync_thread_join(&healthy_thread), SALTS_OK);
+  sync_thread_destroy(&healthy_thread);
   check_equal(healthy.status, 0);
 
   check_equal(salts_tcp_proxy_stop(proxy), SALTS_OK);
   check_equal(salts_tcp_proxy_destroy(proxy), SALTS_OK);
-  check_equal(cmeta_thread_join(&echo_thread), SALTS_OK);
-  cmeta_thread_destroy(&echo_thread);
+  check_equal(sync_thread_join(&echo_thread), SALTS_OK);
+  sync_thread_destroy(&echo_thread);
   check_equal(echo.status, 0);
 }
 
@@ -312,8 +312,8 @@ typedef struct proxy_test_sg_fixture {
   salts_tcp_proxy_sg_t *host;
   proxy_test_echo_t echoes[SALTS_TCP_PROXY_SG_MAX_OWNERS];
   proxy_test_client_t clients[SALTS_TCP_PROXY_SG_MAX_OWNERS];
-  cmeta_thread_t echo_threads[SALTS_TCP_PROXY_SG_MAX_OWNERS];
-  cmeta_thread_t client_threads[SALTS_TCP_PROXY_SG_MAX_OWNERS];
+  sync_thread_t echo_threads[SALTS_TCP_PROXY_SG_MAX_OWNERS];
+  sync_thread_t client_threads[SALTS_TCP_PROXY_SG_MAX_OWNERS];
   proxy_test_socket_t held[SALTS_TCP_PROXY_SG_MAX_OWNERS];
   const void *threads[SALTS_TCP_PROXY_SG_MAX_OWNERS];
   size_t accesses[SALTS_TCP_PROXY_SG_MAX_OWNERS];
@@ -330,8 +330,8 @@ static void proxy_test_sg_callback(proxy_test_sg_fixture *f, int routing) {
     atomic_fetch_add(&f->failures, 1);
     return;
   }
-  if (!f->threads[owner]) f->threads[owner] = cmeta_thread_current_token();
-  if (f->threads[owner] != cmeta_thread_current_token() ||
+  if (!f->threads[owner]) f->threads[owner] = sync_thread_current_token();
+  if (f->threads[owner] != sync_thread_current_token() ||
       salts_tcp_proxy_sg_poll(f->host, 0u, &work) != SALTS_EBUSY ||
       salts_tcp_proxy_sg_stop(f->host) != SALTS_EBUSY ||
       salts_tcp_proxy_sg_destroy(f->host) != SALTS_EBUSY)
@@ -382,12 +382,12 @@ static void proxy_test_sg_cleanup(proxy_test_sg_fixture *f) {
   }
   for (size_t i = 0u; i < SALTS_TCP_PROXY_SG_MAX_OWNERS; ++i) {
     if (f->client_threads[i]) {
-      check_warn(cmeta_thread_join(&f->client_threads[i]) == SALTS_OK);
-      cmeta_thread_destroy(&f->client_threads[i]);
+      check_warn(sync_thread_join(&f->client_threads[i]) == SALTS_OK);
+      sync_thread_destroy(&f->client_threads[i]);
     }
     if (f->echo_threads[i]) {
-      check_warn(cmeta_thread_join(&f->echo_threads[i]) == SALTS_OK);
-      cmeta_thread_destroy(&f->echo_threads[i]);
+      check_warn(sync_thread_join(&f->echo_threads[i]) == SALTS_OK);
+      sync_thread_destroy(&f->echo_threads[i]);
     } else proxy_test_close(f->echoes[i].listener);
   }
 }
@@ -422,18 +422,18 @@ static void proxy_test_sg_start(proxy_test_sg_fixture *f, size_t owners,
 static void proxy_test_sg_roundtrips(proxy_test_sg_fixture *f, size_t owners,
                                     proxy_test_kind_t kind) {
   uint16_t port = 0u;
-  uint64_t start = cmeta_monotonic_ms();
+  uint64_t start = monotonic_ms();
   salts_tcp_proxy_sg_stats_t stats;
   proxy_test_sg_start(f, owners, CNET_OWNER_PLACE_ROUND_ROBIN, 8u, kind);
   check_equal(salts_tcp_proxy_sg_port(f->host, &port), SALTS_OK);
   for (size_t i = 0u; i < owners; ++i) {
     f->echoes[i].listener = proxy_test_echo_listener(&f->echoes[i].port);
     check(f->echoes[i].listener != PROXY_TEST_INVALID_SOCKET);
-    check_equal(cmeta_thread_create(&f->echo_threads[i], proxy_test_echo_run, &f->echoes[i]), SALTS_OK);
+    check_equal(sync_thread_create(&f->echo_threads[i], proxy_test_echo_run, &f->echoes[i]), SALTS_OK);
     f->clients[i].kind = kind;
     f->clients[i].proxy_port = port;
     f->clients[i].backend_port = f->echoes[i].port;
-    check_equal(cmeta_thread_create(&f->client_threads[i], proxy_test_client_run, &f->clients[i]), SALTS_OK);
+    check_equal(sync_thread_create(&f->client_threads[i], proxy_test_client_run, &f->clients[i]), SALTS_OK);
   }
   for (;;) {
     bool done = true;
@@ -442,7 +442,7 @@ static void proxy_test_sg_roundtrips(proxy_test_sg_fixture *f, size_t owners,
     for (size_t i = 0u; i < owners; ++i)
       if (!atomic_load_explicit(&f->clients[i].done, memory_order_acquire)) done = false;
     if (done) break;
-    check(cmeta_monotonic_ms() - start < PROXY_TEST_TIMEOUT_MS);
+    check(monotonic_ms() - start < PROXY_TEST_TIMEOUT_MS);
   }
   for (size_t i = 0u; i < owners; ++i) {
     check_equal(f->clients[i].status, 0);
@@ -469,7 +469,7 @@ static void proxy_test_sg_roundtrips(proxy_test_sg_fixture *f, size_t owners,
 
 static int proxy_test_sg_wait_placements(proxy_test_sg_fixture *f, uint64_t placements,
                                         salts_tcp_proxy_sg_stats_t *stats) {
-  uint64_t start = cmeta_monotonic_ms();
+  uint64_t start = monotonic_ms();
   int first = SALTS_OK;
   for (;;) {
     size_t work;
@@ -478,7 +478,7 @@ static int proxy_test_sg_wait_placements(proxy_test_sg_fixture *f, uint64_t plac
     check(status == SALTS_OK || status == SALTS_ENOBUFS);
     check_equal(salts_tcp_proxy_sg_get_stats(f->host, stats), SALTS_OK);
     if (stats->placement_calls >= placements) return first;
-    check(cmeta_monotonic_ms() - start < PROXY_TEST_TIMEOUT_MS);
+    check(monotonic_ms() - start < PROXY_TEST_TIMEOUT_MS);
   }
 }
 
@@ -503,12 +503,12 @@ static void proxy_test_sg_pinned_full(proxy_test_sg_fixture *f,
   check_equal(stats.owners[0].local_admissions, 0u);
   proxy_test_close(f->held[0]);
   f->held[0] = PROXY_TEST_INVALID_SOCKET;
-  start = cmeta_monotonic_ms();
+  start = monotonic_ms();
   do {
     size_t work;
     check_equal(salts_tcp_proxy_sg_poll(f->host, 1u, &work), SALTS_OK);
     check_equal(salts_tcp_proxy_sg_get_stats(f->host, &stats), SALTS_OK);
-    check(cmeta_monotonic_ms() - start < PROXY_TEST_TIMEOUT_MS);
+    check(monotonic_ms() - start < PROXY_TEST_TIMEOUT_MS);
   } while (!stats.owners[1].drained);
   f->held[2] = proxy_test_connect(port);
   check(f->held[2] != PROXY_TEST_INVALID_SOCKET);
@@ -542,22 +542,22 @@ static void proxy_test_sg_mixed_failure(proxy_test_sg_fixture *f) {
   f->clients[0].kind = PROXY_TEST_SOCKS_REJECT;
   f->clients[0].proxy_port = port;
   f->clients[0].backend_port = refused_port;
-  check_equal(cmeta_thread_create(&f->client_threads[0], proxy_test_client_run, &f->clients[0]), SALTS_OK);
+  check_equal(sync_thread_create(&f->client_threads[0], proxy_test_client_run, &f->clients[0]), SALTS_OK);
   check_equal(proxy_test_sg_wait_placements(f, 2u, &stats), SALTS_OK);
 
   f->echoes[0].listener = proxy_test_echo_listener(&f->echoes[0].port);
   check(f->echoes[0].listener != PROXY_TEST_INVALID_SOCKET);
-  check_equal(cmeta_thread_create(&f->echo_threads[0], proxy_test_echo_run, &f->echoes[0]), SALTS_OK);
+  check_equal(sync_thread_create(&f->echo_threads[0], proxy_test_echo_run, &f->echoes[0]), SALTS_OK);
   f->clients[1].kind = PROXY_TEST_SOCKS;
   f->clients[1].proxy_port = port;
   f->clients[1].backend_port = f->echoes[0].port;
-  check_equal(cmeta_thread_create(&f->client_threads[1], proxy_test_client_run, &f->clients[1]), SALTS_OK);
-  start = cmeta_monotonic_ms();
+  check_equal(sync_thread_create(&f->client_threads[1], proxy_test_client_run, &f->clients[1]), SALTS_OK);
+  start = monotonic_ms();
   do {
     size_t work;
     check_equal(salts_tcp_proxy_sg_poll(f->host, 1u, &work), SALTS_OK);
     check_equal(salts_tcp_proxy_sg_get_stats(f->host, &stats), SALTS_OK);
-    if (cmeta_monotonic_ms() - start >= PROXY_TEST_TIMEOUT_MS) break;
+    if (monotonic_ms() - start >= PROXY_TEST_TIMEOUT_MS) break;
   } while (!atomic_load_explicit(&f->clients[0].done, memory_order_acquire) ||
            !atomic_load_explicit(&f->clients[1].done, memory_order_acquire) ||
            !stats.owners[1].drained ||
@@ -765,7 +765,7 @@ spec("Salts CNet TCP proxy") {
     it("rejects an unknown strict key before placement without consuming credit") {
       salts_tcp_proxy_sg_stats_t stats;
       uint16_t port;
-      uint64_t start = cmeta_monotonic_ms();
+      uint64_t start = monotonic_ms();
       f.strict_key = 1u;
       f.key_status = SALTS_EINVAL;
       proxy_test_sg_start(&f, 2u, CNET_OWNER_PLACE_STRICT_KEY, 1u, PROXY_TEST_SOCKS);
@@ -778,7 +778,7 @@ spec("Salts CNet TCP proxy") {
         check(status == SALTS_OK || status == SALTS_EINVAL);
         check_equal(salts_tcp_proxy_sg_get_stats(f.host, &stats), SALTS_OK);
         if (stats.rejected_admissions) check_equal(status, SALTS_EINVAL);
-        check(cmeta_monotonic_ms() - start < PROXY_TEST_TIMEOUT_MS);
+        check(monotonic_ms() - start < PROXY_TEST_TIMEOUT_MS);
       } while (!stats.rejected_admissions);
       check_equal(stats.placement_calls, 0u);
       check_true(stats.owners[0].drained);

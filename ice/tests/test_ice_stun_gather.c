@@ -1,7 +1,7 @@
 #include "stun_test_server.h"
 #include "ice/salts_ice.h"
-#include <fmt.h>
-#include <salts/error_codes.h>
+#include <core/fmt.h>
+#include <core/error_codes.h>
 #include <tinytest.h>
 
 typedef struct gather_result {
@@ -28,7 +28,7 @@ spec("ICE gathering with the shared STUN Binding transaction") {
   for (int cancel = 0; cancel <= 1; ++cancel) {
     it("retains the gathering socket and closes on its Owner (cancel=%d)", cancel) {
       stun_test_server_t server;
-      cmeta_thread_t thread = NULL;
+      sync_thread_t thread = NULL;
       salts_ice_agent_t *agent;
       ice_config_t config = ice_default_config();
       ice_callbacks_t callbacks = {0};
@@ -52,10 +52,10 @@ spec("ICE gathering with the shared STUN Binding transaction") {
         server.user = agent;
         server.suppress_response = 1;
       }
-      check_equal(cmeta_thread_create(&thread, stun_test_server_run, &server), 0);
+      check_equal(sync_thread_create(&thread, stun_test_server_run, &server), 0);
       status = ice_agent_gather_candidates(agent);
-      check_equal(cmeta_thread_join(&thread), 0);
-      cmeta_thread_destroy(&thread);
+      check_equal(sync_thread_join(&thread), 0);
+      sync_thread_destroy(&thread);
       stun_test_server_close(&server);
       check_equal(status, ICE_AGENT_ERROR_CLOSED);
       check_equal(ice_agent_get_state(agent), ICE_STATE_CLOSED);

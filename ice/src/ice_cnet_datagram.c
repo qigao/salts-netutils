@@ -13,8 +13,8 @@
 
 #include "ice_cnet_datagram.h"
 
-#include <salts/clock.h>
-#include <salts/error_codes.h>
+#include <core/clock.h>
+#include <core/error_codes.h>
 
 #include <limits.h>
 #include <stdio.h>
@@ -32,7 +32,7 @@ static native_io_backend_kind ice_cnet_backend(void) {
 }
 
 static uint32_t ice_cnet_remaining_ms(uint64_t deadline) {
-  const uint64_t now = cmeta_monotonic_ms();
+  const uint64_t now = monotonic_ms();
   const uint64_t remaining = now < deadline ? deadline - now : 0u;
   return remaining > UINT32_MAX ? UINT32_MAX : (uint32_t)remaining;
 }
@@ -288,10 +288,17 @@ int ice_cnet_datagram_send(ice_cnet_datagram_t *transport, const cnet_datagram_p
   if (transport->external) return SALTS_ENOTSUP;
   status = ice_cnet_datagram_send_begin(transport, peer, data, size, &tag);
   if (status != SALTS_OK) return status;
-  deadline = cmeta_monotonic_ms() + timeout_ms;
+  deadline = monotonic_ms() + timeout_ms;
   while (transport->send_pending) {
     status = ice_cnet_datagram_poll_until(transport, deadline);
-    if (status != SALTS_OK) return status;
+    if (status != SALTS_OK && transport->send_pending) {
+      /* A wake/deadline is not a send terminal. Cancel this candidate's
+       * socket, route the native completion and return the actual send
+       * status. This path owns its backend and runs outside callbacks. */
+      do {
+        (void)ice_cnet_datagram_stop(transport, timeout_ms);
+      } while (transport->send_pending);
+    }
   }
   return ice_cnet_datagram_send_result(transport, tag);
 }
@@ -342,7 +349,7 @@ int ice_cnet_datagram_receive(ice_cnet_datagram_t *transport, cnet_datagram_peer
   if (transport->external) return SALTS_ENOTSUP;
   status = ice_cnet_datagram_receive_begin(transport);
   if (status != SALTS_OK) return status;
-  deadline = cmeta_monotonic_ms() + timeout_ms;
+  deadline = monotonic_ms() + timeout_ms;
   while (transport->receive_ready == 0) {
     status = ice_cnet_datagram_poll_until(transport, deadline);
     if (status != SALTS_OK) return status;

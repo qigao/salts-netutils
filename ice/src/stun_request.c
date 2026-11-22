@@ -1,6 +1,6 @@
 #include "ice/salts_stun.h"
 #include "stun_binding_transaction.h"
-#include <salts/clock.h>
+#include <core/clock.h>
 #include <stdlib.h>
 
 struct stun_request_s {
@@ -43,7 +43,7 @@ int stun_request_start(stun_request_t *request, const stun_client_config_t *conf
       0u, STUN_MAX_MESSAGE_SIZE);
   if (status == SALTS_OK)
     status = stun_binding_transaction_start(&request->transaction, &request->transport,
-        &peer, (uint32_t)timeout, (unsigned int)attempts, cmeta_monotonic_ms());
+        &peer, (uint32_t)timeout, (unsigned int)attempts, monotonic_ms());
   if (status != SALTS_OK) stun_request_finish(request, status);
   return status;
 }
@@ -56,9 +56,9 @@ int stun_request_progress(stun_request_t *request, uint32_t max_wait_ms) {
   if (request->stopping) return SALTS_ESHUTDOWN;
   if (!request->started) return SALTS_EINVAL;
   if (request->transaction.phase == STUN_BINDING_DONE) return SALTS_OK;
-  (void)stun_binding_transaction_advance(&request->transaction, cmeta_monotonic_ms());
+  (void)stun_binding_transaction_advance(&request->transaction, monotonic_ms());
   if (request->transaction.phase == STUN_BINDING_DONE) return SALTS_OK;
-  now = cmeta_monotonic_ms();
+  now = monotonic_ms();
   remaining = now < request->transaction.deadline_ms
       ? request->transaction.deadline_ms - now : 0u;
   if (remaining < max_wait_ms) max_wait_ms = (uint32_t)remaining;
@@ -67,7 +67,7 @@ int stun_request_progress(stun_request_t *request, uint32_t max_wait_ms) {
     stun_request_finish(request, status);
     return status;
   }
-  (void)stun_binding_transaction_advance(&request->transaction, cmeta_monotonic_ms());
+  (void)stun_binding_transaction_advance(&request->transaction, monotonic_ms());
   return SALTS_OK;
 }
 

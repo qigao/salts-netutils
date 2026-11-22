@@ -18,7 +18,7 @@ set_target_properties(${TEST_TARGET} PROPERTIES
 add_executable(test_snmp_cnet test_snmp_cnet.c)
 target_link_libraries(test_snmp_cnet PRIVATE
     SaltsNet::SNMP
-    Salts::Platform
+    Salts::Core
     Salts::TinyTest
 )
 target_include_directories(test_snmp_cnet PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)

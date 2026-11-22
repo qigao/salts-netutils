@@ -5,7 +5,7 @@
 
 #include "mime_content_disposition.h"
 #include "tinytest.h"
-#include "cmeta_buffer.h"
+#include <memory/buffer.h>
 #include <string.h>
 
 spec("mime_content_disposition") {

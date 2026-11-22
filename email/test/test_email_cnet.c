@@ -19,8 +19,8 @@ typedef int email_test_socket_t;
 #include "../src/email_cnet_transport.h"
 #include "tinytest.h"
 
-#include <salts/error_codes.h>
-#include <salts/thread.h>
+#include <core/error_codes.h>
+#include <threads/threads.h>
 
 #include <stdatomic.h>
 #include <stdint.h>
@@ -190,7 +190,7 @@ static int email_test_run_imap(email_test_socket_t peer) {
 
 static int email_test_run_stall(email_test_server_t *server) {
   while (atomic_load_explicit(&server->release_peer, memory_order_acquire) == 0) {
-    cmeta_sleep_ms(1u);
+    sleep_ms(1u);
   }
   return 0;
 }
@@ -279,7 +279,7 @@ spec("email CNet transport") {
   group("CNet 2.3 managed connection episodes") {
     static email_cnet_transport_t transport;
     static email_test_server_t server;
-    static cmeta_thread_t thread;
+    static sync_thread_t thread;
     static uint16_t port;
     before_each() {
       memset(&transport, 0, sizeof(transport));
@@ -292,8 +292,8 @@ spec("email CNet transport") {
       check_warn(email_cnet_transport_destroy(&transport) == SALTS_OK);
       atomic_store_explicit(&server.release_peer, 1, memory_order_release);
       if (thread) {
-        check_warn(cmeta_thread_join(&thread) == SALTS_OK);
-        cmeta_thread_destroy(&thread);
+        check_warn(sync_thread_join(&thread) == SALTS_OK);
+        sync_thread_destroy(&thread);
       }
       email_test_server_close(&server);
     }
@@ -304,7 +304,7 @@ spec("email CNet transport") {
       check_equal(email_cnet_transport_connect(&transport, "[localhost]", port, 0), SALTS_EINVAL);
       check_null(transport.manager.impl);
       check_equal(atomic_load(&transport.active), 0);
-      check_equal(cmeta_thread_create(&thread, email_test_server_run, &server), SALTS_OK);
+      check_equal(sync_thread_create(&thread, email_test_server_run, &server), SALTS_OK);
       check_equal(email_cnet_transport_connect(&transport, "127.0.0.1", port, 0), SALTS_OK);
       check_equal(cnet_manager_get_snapshot(&transport.manager, &snapshot), SALTS_OK);
       check_equal(snapshot.record_capacity, 1u);
@@ -320,7 +320,7 @@ spec("email CNet transport") {
       cnet_connection previous = {0};
       for (size_t episode = 0u; episode < 3u; ++episode) {
         atomic_store(&server.release_peer, 0);
-        check_equal(cmeta_thread_create(&thread, email_test_server_run, &server), SALTS_OK);
+        check_equal(sync_thread_create(&thread, email_test_server_run, &server), SALTS_OK);
         check_equal(email_cnet_transport_connect(&transport, "127.0.0.1", port, 0), SALTS_OK);
         check(transport.connection.slot != previous.slot ||
               transport.connection.generation != previous.generation);
@@ -330,8 +330,8 @@ spec("email CNet transport") {
         check_null(transport.manager.impl);
         check_equal(atomic_load(&transport.active), 0);
         atomic_store_explicit(&server.release_peer, 1, memory_order_release);
-        check_equal(cmeta_thread_join(&thread), SALTS_OK);
-        cmeta_thread_destroy(&thread);
+        check_equal(sync_thread_join(&thread), SALTS_OK);
+        sync_thread_destroy(&thread);
         thread = NULL;
         check_equal(server.status, 0);
       }
@@ -342,7 +342,7 @@ spec("email CNet transport") {
     static const char message[] = "Subject: loopback\r\n\r\n.first\r\n..second\r\n";
     static const char *recipients[] = {"receiver@example.test"};
     email_test_server_t server;
-    cmeta_thread_t thread = NULL;
+    sync_thread_t thread = NULL;
     smtp_client_t *client = NULL;
     uint16_t port = 0u;
     int connect_status = -1;
@@ -350,7 +350,7 @@ spec("email CNet transport") {
 
     check_equal(email_test_server_open(&server, &port), 0);
     server.behavior = EMAIL_TEST_SMTP_PLAINTEXT;
-    check_equal(cmeta_thread_create(&thread, email_test_server_run, &server), 0);
+    check_equal(sync_thread_create(&thread, email_test_server_run, &server), 0);
 
     const smtp_config_t config = {
         .host = "127.0.0.1", .port = (int)port, .timeout_ms = EMAIL_TEST_CLIENT_TIMEOUT_MS};
@@ -366,8 +366,8 @@ spec("email CNet transport") {
 
     email_test_close_socket(server.listener);
     server.listener = EMAIL_TEST_INVALID_SOCKET;
-    check_equal(cmeta_thread_join(&thread), 0);
-    cmeta_thread_destroy(&thread);
+    check_equal(sync_thread_join(&thread), 0);
+    sync_thread_destroy(&thread);
     email_test_server_close(&server);
 
     check_equal(connect_status, 0);
@@ -378,14 +378,14 @@ spec("email CNet transport") {
 
   it("upgrades the existing SMTP socket and fails closed on invalid TLS") {
     email_test_server_t server;
-    cmeta_thread_t thread = NULL;
+    sync_thread_t thread = NULL;
     smtp_client_t *client = NULL;
     uint16_t port = 0u;
     int connect_status = 0;
 
     check_equal(email_test_server_open(&server, &port), 0);
     server.behavior = EMAIL_TEST_SMTP_STARTTLS_FAILURE;
-    check_equal(cmeta_thread_create(&thread, email_test_server_run, &server), 0);
+    check_equal(sync_thread_create(&thread, email_test_server_run, &server), 0);
 
     const smtp_config_t config = {.host = "127.0.0.1",
                                   .port = (int)port,
@@ -398,8 +398,8 @@ spec("email CNet transport") {
 
     email_test_close_socket(server.listener);
     server.listener = EMAIL_TEST_INVALID_SOCKET;
-    check_equal(cmeta_thread_join(&thread), 0);
-    cmeta_thread_destroy(&thread);
+    check_equal(sync_thread_join(&thread), 0);
+    sync_thread_destroy(&thread);
     email_test_server_close(&server);
 
     check_not_equal(connect_status, 0);
@@ -409,7 +409,7 @@ spec("email CNet transport") {
 
   it("runs POP3 authentication and STAT without a coroutine context") {
     email_test_server_t server;
-    cmeta_thread_t thread = NULL;
+    sync_thread_t thread = NULL;
     pop3_client_t *client = NULL;
     uint16_t port = 0u;
     int connect_status = -1;
@@ -418,7 +418,7 @@ spec("email CNet transport") {
 
     check_equal(email_test_server_open(&server, &port), 0);
     server.behavior = EMAIL_TEST_POP3_PLAINTEXT;
-    check_equal(cmeta_thread_create(&thread, email_test_server_run, &server), 0);
+    check_equal(sync_thread_create(&thread, email_test_server_run, &server), 0);
 
     const pop3_config_t config = {.host = "127.0.0.1",
                                   .port = (int)port,
@@ -436,8 +436,8 @@ spec("email CNet transport") {
 
     email_test_close_socket(server.listener);
     server.listener = EMAIL_TEST_INVALID_SOCKET;
-    check_equal(cmeta_thread_join(&thread), 0);
-    cmeta_thread_destroy(&thread);
+    check_equal(sync_thread_join(&thread), 0);
+    sync_thread_destroy(&thread);
     email_test_server_close(&server);
 
     check_equal(connect_status, 0);
@@ -448,14 +448,14 @@ spec("email CNet transport") {
 
   it("runs IMAP login and logout without a coroutine context") {
     email_test_server_t server;
-    cmeta_thread_t thread = NULL;
+    sync_thread_t thread = NULL;
     imap_client_t *client = NULL;
     uint16_t port = 0u;
     int connect_status = -1;
 
     check_equal(email_test_server_open(&server, &port), 0);
     server.behavior = EMAIL_TEST_IMAP_PLAINTEXT;
-    check_equal(cmeta_thread_create(&thread, email_test_server_run, &server), 0);
+    check_equal(sync_thread_create(&thread, email_test_server_run, &server), 0);
 
     const imap_config_t config = {.host = "127.0.0.1",
                                   .port = (int)port,
@@ -470,8 +470,8 @@ spec("email CNet transport") {
 
     email_test_close_socket(server.listener);
     server.listener = EMAIL_TEST_INVALID_SOCKET;
-    check_equal(cmeta_thread_join(&thread), 0);
-    cmeta_thread_destroy(&thread);
+    check_equal(sync_thread_join(&thread), 0);
+    sync_thread_destroy(&thread);
     email_test_server_close(&server);
 
     check_equal(connect_status, 0);
@@ -481,32 +481,33 @@ spec("email CNet transport") {
   it("interrupts a blocked SMTP receive through CNet wake") {
     email_test_server_t server;
     email_test_smtp_owner_t owner;
-    cmeta_thread_t server_thread = NULL;
-    cmeta_thread_t owner_thread = NULL;
+    sync_thread_t server_thread = NULL;
+    sync_thread_t owner_thread = NULL;
     smtp_client_t *client = NULL;
     uint16_t port = 0u;
     int interrupt_status = SALTS_EIO;
 
     check_equal(email_test_server_open(&server, &port), 0);
     server.behavior = EMAIL_TEST_SMTP_STALL;
-    check_equal(cmeta_thread_create(&server_thread, email_test_server_run, &server), 0);
+    check_equal(sync_thread_create(&server_thread, email_test_server_run, &server), 0);
 
     const smtp_config_t config = {
         .host = "127.0.0.1", .port = (int)port, .timeout_ms = EMAIL_TEST_TIMEOUT_MS};
     client = smtp_client_create(&config);
     check_not_null(client);
     owner = (email_test_smtp_owner_t){.client = client, .connect_status = 0};
-    check_equal(cmeta_thread_create(&owner_thread, email_test_smtp_connect, &owner), 0);
+    check_equal(sync_thread_create(&owner_thread, email_test_smtp_connect, &owner), 0);
 
     while (atomic_load_explicit(&server.accepted, memory_order_acquire) == 0) {
-      cmeta_sleep_ms(1u);
+      sleep_ms(1u);
     }
     interrupt_status = smtp_interrupt(client, SALTS_ESHUTDOWN);
-    check_equal(cmeta_thread_join(&owner_thread), 0);
-    cmeta_thread_destroy(&owner_thread);
+    check_equal(sync_thread_join(&owner_thread), 0);
+    sync_thread_destroy(&owner_thread);
     atomic_store_explicit(&server.release_peer, 1, memory_order_release);
-    check_equal(cmeta_thread_join(&server_thread), 0);
-    cmeta_thread_destroy(&server_thread);
+    check_equal(sync_thread_join(&server_thread), 0);
+    sync_thread_destroy(&server_thread);
+    check_warn(smtp_interrupt(client, SALTS_ESHUTDOWN) == SALTS_ENOTCONN);
     smtp_client_free(client);
 
     email_test_close_socket(server.listener);

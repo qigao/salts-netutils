@@ -1,31 +1,31 @@
 /** @file x509_cert.c @brief X.509 DER certificate parser. */
 #include "x509_cert.h"
-#include <salts/asn1_value.h>
+#include <asn1_value.h>
 #include <stdlib.h>
 #include <string.h>
 
-static int tag_is(const salts_asn1_value *value, uint8_t tag_class,
+static int tag_is(const asn1_value *value, uint8_t tag_class,
                   uint8_t constructed, uint32_t tag_number) {
     uint8_t actual_class = 0u, actual_constructed = 0u;
     uint32_t actual_number = 0u;
     return value &&
-           salts_asn1_value_get_tag(value, &actual_class, &actual_constructed,
+           asn1_value_get_tag(value, &actual_class, &actual_constructed,
                                     &actual_number) == SALTS_ASN1_OK &&
            actual_class == tag_class && actual_constructed == constructed &&
            actual_number == tag_number;
 }
 
-static const salts_asn1_value *child(const salts_asn1_value *value,
+static const asn1_value *child(const asn1_value *value,
                                      size_t index) {
-    return salts_asn1_value_child_at(value, index);
+    return asn1_value_child_at(value, index);
 }
 
-static int copy_content(const salts_asn1_value *value, uint8_t **out,
+static int copy_content(const asn1_value *value, uint8_t **out,
                         size_t *out_size) {
     const uint8_t *data = NULL;
     size_t size = 0u;
     if (!out || !out_size ||
-        salts_asn1_value_get_content(value, &data, &size) != SALTS_ASN1_OK)
+        asn1_value_get_content(value, &data, &size) != SALTS_ASN1_OK)
         return -1;
     *out = NULL;
     *out_size = size;
@@ -51,11 +51,11 @@ static bool oid_equals(const uint32_t *oid, size_t count, const char *text) {
            memcmp(oid, expected, count * sizeof(*oid)) == 0;
 }
 
-static char *string_from_asn1(const salts_asn1_value *value) {
+static char *string_from_asn1(const asn1_value *value) {
     const uint8_t *data = NULL;
     size_t size = 0u;
     char *string;
-    if (!value || salts_asn1_value_get_content(value, &data, &size) !=
+    if (!value || asn1_value_get_content(value, &data, &size) !=
                       SALTS_ASN1_OK ||
         size == 0u)
         return NULL;
@@ -66,17 +66,17 @@ static char *string_from_asn1(const salts_asn1_value *value) {
     return string;
 }
 
-static time_t parse_asn1_time(const salts_asn1_value *value) {
+static time_t parse_asn1_time(const asn1_value *value) {
     const uint8_t *data = NULL;
     size_t size = 0u;
     uint8_t tag_class = 0u, constructed = 0u;
     uint32_t tag_number = 0u;
     struct tm parsed = {0};
     const char *text;
-    if (salts_asn1_value_get_tag(value, &tag_class, &constructed, &tag_number) !=
+    if (asn1_value_get_tag(value, &tag_class, &constructed, &tag_number) !=
             SALTS_ASN1_OK ||
         tag_class != 0u || constructed ||
-        salts_asn1_value_get_content(value, &data, &size) != SALTS_ASN1_OK)
+        asn1_value_get_content(value, &data, &size) != SALTS_ASN1_OK)
         return 0;
     text = (const char *)data;
     if (tag_number == 23u) {
@@ -104,17 +104,17 @@ static time_t parse_asn1_time(const salts_asn1_value *value) {
     return mktime(&parsed);
 }
 
-static int copy_oid(const salts_asn1_value *value, uint32_t **out,
+static int copy_oid(const asn1_value *value, uint32_t **out,
                     size_t *out_count) {
     size_t count = 0u;
     uint32_t *components;
     if (!out || !out_count ||
-        salts_asn1_value_get_oid(value, NULL, 0u, &count) != SALTS_ASN1_OK ||
+        asn1_value_get_oid(value, NULL, 0u, &count) != SALTS_ASN1_OK ||
         count > SIZE_MAX / sizeof(*components))
         return -1;
     components = (uint32_t *)malloc(count * sizeof(*components));
     if (!components) return -1;
-    if (salts_asn1_value_get_oid(value, components, count, &count) !=
+    if (asn1_value_get_oid(value, components, count, &count) !=
         SALTS_ASN1_OK) {
         free(components);
         return -1;
@@ -124,21 +124,21 @@ static int copy_oid(const salts_asn1_value *value, uint32_t **out,
     return 0;
 }
 
-static int parse_name(const salts_asn1_value *sequence, x509_name_t *name) {
+static int parse_name(const asn1_value *sequence, x509_name_t *name) {
     if (!tag_is(sequence, 0u, 1u, 16u)) return -1;
     memset(name, 0, sizeof(*name));
-    for (size_t i = 0u; i < salts_asn1_value_child_count(sequence); ++i) {
-        const salts_asn1_value *rdn = child(sequence, i);
+    for (size_t i = 0u; i < asn1_value_child_count(sequence); ++i) {
+        const asn1_value *rdn = child(sequence, i);
         if (!tag_is(rdn, 0u, 1u, 17u)) continue;
-        for (size_t j = 0u; j < salts_asn1_value_child_count(rdn); ++j) {
-            const salts_asn1_value *attribute = child(rdn, j);
-            const salts_asn1_value *oid_value, *text_value;
+        for (size_t j = 0u; j < asn1_value_child_count(rdn); ++j) {
+            const asn1_value *attribute = child(rdn, j);
+            const asn1_value *oid_value, *text_value;
             uint32_t *oid = NULL;
             size_t oid_count = 0u;
             char *text;
             char **destination = NULL;
             if (!tag_is(attribute, 0u, 1u, 16u) ||
-                salts_asn1_value_child_count(attribute) < 2u)
+                asn1_value_child_count(attribute) < 2u)
                 continue;
             oid_value = child(attribute, 0u);
             text_value = child(attribute, 1u);
@@ -170,10 +170,10 @@ static int parse_name(const salts_asn1_value *sequence, x509_name_t *name) {
     return 0;
 }
 
-static int parse_algorithm(const salts_asn1_value *sequence,
+static int parse_algorithm(const asn1_value *sequence,
                            x509_algorithm_t *algorithm) {
     if (!tag_is(sequence, 0u, 1u, 16u) ||
-        salts_asn1_value_child_count(sequence) < 1u)
+        asn1_value_child_count(sequence) < 1u)
         return -1;
     memset(algorithm, 0, sizeof(*algorithm));
     return copy_oid(child(sequence, 0u), &algorithm->oid,
@@ -182,13 +182,13 @@ static int parse_algorithm(const salts_asn1_value *sequence,
 
 static int parse_rsa_pubkey(const uint8_t *der, size_t der_size,
                             x509_rsa_pubkey_t *rsa) {
-    salts_asn1_value *sequence = NULL;
-    const salts_asn1_value *modulus, *exponent;
-    if (salts_asn1_value_decode(der, der_size, SALTS_ASN1_DER, &sequence) !=
+    asn1_value *sequence = NULL;
+    const asn1_value *modulus, *exponent;
+    if (asn1_value_decode(der, der_size, SALTS_ASN1_DER, &sequence) !=
             SALTS_ASN1_OK ||
         !tag_is(sequence, 0u, 1u, 16u) ||
-        salts_asn1_value_child_count(sequence) != 2u) {
-        salts_asn1_value_free(sequence);
+        asn1_value_child_count(sequence) != 2u) {
+        asn1_value_free(sequence);
         return -1;
     }
     modulus = child(sequence, 0u);
@@ -196,27 +196,27 @@ static int parse_rsa_pubkey(const uint8_t *der, size_t der_size,
     if (!tag_is(modulus, 0u, 0u, 2u) || !tag_is(exponent, 0u, 0u, 2u) ||
         copy_content(modulus, &rsa->modulus, &rsa->modulus_len) != 0 ||
         copy_content(exponent, &rsa->exponent, &rsa->exponent_len) != 0) {
-        salts_asn1_value_free(sequence);
+        asn1_value_free(sequence);
         return -1;
     }
-    salts_asn1_value_free(sequence);
+    asn1_value_free(sequence);
     return 0;
 }
 
-static int parse_pubkey_info(const salts_asn1_value *sequence,
+static int parse_pubkey_info(const asn1_value *sequence,
                              x509_pubkey_info_t *public_key) {
-    const salts_asn1_value *bits;
+    const asn1_value *bits;
     const uint8_t *content = NULL;
     size_t size = 0u;
     if (!tag_is(sequence, 0u, 1u, 16u) ||
-        salts_asn1_value_child_count(sequence) != 2u)
+        asn1_value_child_count(sequence) != 2u)
         return -1;
     memset(public_key, 0, sizeof(*public_key));
     if (parse_algorithm(child(sequence, 0u), &public_key->algorithm) != 0)
         return -1;
     bits = child(sequence, 1u);
     if (!tag_is(bits, 0u, 0u, 3u) ||
-        salts_asn1_value_get_content(bits, &content, &size) != SALTS_ASN1_OK ||
+        asn1_value_get_content(bits, &content, &size) != SALTS_ASN1_OK ||
         size == 0u || content[0] > 7u)
         return -1;
     ++content;
@@ -247,23 +247,23 @@ static int parse_pubkey_info(const salts_asn1_value *sequence,
     return 0;
 }
 
-static int parse_tbs_certificate(const salts_asn1_value *tbs,
+static int parse_tbs_certificate(const asn1_value *tbs,
                                  x509_tbs_cert_t *certificate) {
     size_t index = 0u, count;
-    const salts_asn1_value *field;
+    const asn1_value *field;
     uint8_t tag_class = 0u, constructed = 0u;
     uint32_t tag_number = 0u;
     int64_t version = 0;
     if (!tag_is(tbs, 0u, 1u, 16u)) return -1;
     memset(certificate, 0, sizeof(*certificate));
-    count = salts_asn1_value_child_count(tbs);
+    count = asn1_value_child_count(tbs);
     if (count < 6u) return -1;
     field = child(tbs, index);
-    if (salts_asn1_value_get_tag(field, &tag_class, &constructed, &tag_number) ==
+    if (asn1_value_get_tag(field, &tag_class, &constructed, &tag_number) ==
             SALTS_ASN1_OK &&
         tag_class == 2u && constructed && tag_number == 0u) {
-        if (salts_asn1_value_child_count(field) != 1u ||
-            salts_asn1_value_get_integer_i64(child(field, 0u), &version) !=
+        if (asn1_value_child_count(field) != 1u ||
+            asn1_value_get_integer_i64(child(field, 0u), &version) !=
                 SALTS_ASN1_OK ||
             version < 0 || version > 2)
             return -1;
@@ -281,7 +281,7 @@ static int parse_tbs_certificate(const salts_asn1_value *tbs,
         return -1;
     field = child(tbs, index++);
     if (!tag_is(field, 0u, 1u, 16u) ||
-        salts_asn1_value_child_count(field) != 2u)
+        asn1_value_child_count(field) != 2u)
         return -1;
     certificate->validity.not_before = parse_asn1_time(child(field, 0u));
     certificate->validity.not_after = parse_asn1_time(child(field, 1u));
@@ -295,34 +295,34 @@ static int parse_tbs_certificate(const salts_asn1_value *tbs,
 
 int x509_cert_parse(const uint8_t *der, size_t der_size,
                     x509_cert_t **certificate_out) {
-    salts_asn1_value *root = NULL;
+    asn1_value *root = NULL;
     x509_cert_t *certificate;
-    const salts_asn1_value *signature;
+    const asn1_value *signature;
     const uint8_t *signature_content = NULL;
     size_t signature_size = 0u;
     if (!der || der_size == 0u || !certificate_out) return -1;
     *certificate_out = NULL;
-    if (salts_asn1_value_decode(der, der_size, SALTS_ASN1_DER, &root) !=
+    if (asn1_value_decode(der, der_size, SALTS_ASN1_DER, &root) !=
             SALTS_ASN1_OK ||
         !tag_is(root, 0u, 1u, 16u) ||
-        salts_asn1_value_child_count(root) != 3u) {
-        salts_asn1_value_free(root);
+        asn1_value_child_count(root) != 3u) {
+        asn1_value_free(root);
         return -1;
     }
     certificate = (x509_cert_t *)calloc(1u, sizeof(*certificate));
     if (!certificate) {
-        salts_asn1_value_free(root);
+        asn1_value_free(root);
         return -1;
     }
     signature = child(root, 2u);
     if (parse_tbs_certificate(child(root, 0u), &certificate->tbs) != 0 ||
         parse_algorithm(child(root, 1u), &certificate->sig_algorithm) != 0 ||
         !tag_is(signature, 0u, 0u, 3u) ||
-        salts_asn1_value_get_content(signature, &signature_content,
+        asn1_value_get_content(signature, &signature_content,
                                      &signature_size) != SALTS_ASN1_OK ||
         signature_size == 0u || signature_content[0] > 7u) {
         x509_cert_free(certificate);
-        salts_asn1_value_free(root);
+        asn1_value_free(root);
         return -1;
     }
     certificate->signature_unused_bits = signature_content[0];
@@ -331,7 +331,7 @@ int x509_cert_parse(const uint8_t *der, size_t der_size,
         certificate->signature = (uint8_t *)malloc(certificate->signature_len);
         if (!certificate->signature) {
             x509_cert_free(certificate);
-            salts_asn1_value_free(root);
+            asn1_value_free(root);
             return -1;
         }
         memcpy(certificate->signature, signature_content + 1u,
@@ -340,12 +340,12 @@ int x509_cert_parse(const uint8_t *der, size_t der_size,
     certificate->der = (uint8_t *)malloc(der_size);
     if (!certificate->der) {
         x509_cert_free(certificate);
-        salts_asn1_value_free(root);
+        asn1_value_free(root);
         return -1;
     }
     memcpy(certificate->der, der, der_size);
     certificate->der_len = der_size;
-    salts_asn1_value_free(root);
+    asn1_value_free(root);
     *certificate_out = certificate;
     return 0;
 }
