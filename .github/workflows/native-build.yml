@@ -122,6 +122,7 @@ jobs:
           $archiveDirectory = "$root/build/archives"
           $cnet = "$root/build/upstream/$env:SDK_PROFILE/cnet"
           $wrapper = "$source/cmake/WithVs.cmd"
+          if ($env:LLVM_MINGW_ROOT) { $env:LLVM_MINGW_ROOT = $env:LLVM_MINGW_ROOT.Replace('\', '/') }
           function Invoke-NativeTool([string]$tool, [string[]]$arguments) {
             if ($IsWindows) { & $wrapper $tool @arguments }
             else { & $tool @arguments }
