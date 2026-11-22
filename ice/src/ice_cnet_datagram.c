@@ -5,6 +5,10 @@
   #include <winsock2.h>
   #include <ws2tcpip.h>
 #else
+  #if defined(__ANDROID__)
+    /* SaltsBase installs endian.h, so use the Bionic declaration directly. */
+    #include <sys/endian.h>
+  #endif
   #include <arpa/inet.h>
   #include <netdb.h>
   #include <netinet/in.h>

@@ -26,6 +26,9 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #else
+#if defined(__ANDROID__)
+  #include <sys/endian.h>
+#endif
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #endif

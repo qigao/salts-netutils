@@ -38,6 +38,9 @@
   #include <process.h>
   #pragma comment(lib, "iphlpapi.lib")
 #else
+  #if defined(__ANDROID__)
+    #include <sys/endian.h>
+  #endif
   #include <arpa/inet.h>
   #include <ifaddrs.h>
   #include <netdb.h>
