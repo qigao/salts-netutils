@@ -1,7 +1,7 @@
 if(NOT DEFINED ENV{RE2C_ROOT} OR NOT IS_DIRECTORY "$ENV{RE2C_ROOT}")
     message(FATAL_ERROR
         "RE2C_ROOT must name the host tools directory from Qigao.Re2c.Binary. "
-        "Run cmake/ci/restore-native-sdk.ps1 to restore it from GitHub Packages.")
+        "Set RE2C_ROOT to the restored host SDK before configuring.")
 endif()
 unset(RE2C_EXECUTABLE CACHE)
 unset(RE2C_EXECUTABLE)

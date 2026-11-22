@@ -10,18 +10,21 @@
     },
     {"name": "native-release-user", "inherits": ["consumer-paths", "toolkit-llvm-mingw-x64"]},
     {"name": "win-release-user", "inherits": ["consumer-paths", "toolkit-msvc"]},
+    {"name": "llvm-release-user", "inherits": ["consumer-paths", "toolkit-llvm-native"]},
     {"name": "linux-release-user", "inherits": ["consumer-paths", "toolkit-gcc"]},
     {"name": "macos-release-user", "inherits": ["consumer-paths", "toolkit-llvm-native"]}
   ],
   "buildPresets": [
     {"name": "native-release-user", "configurePreset": "native-release-user"},
     {"name": "win-release-user", "configurePreset": "win-release-user"},
+    {"name": "llvm-release-user", "configurePreset": "llvm-release-user"},
     {"name": "linux-release-user", "configurePreset": "linux-release-user"},
     {"name": "macos-release-user", "configurePreset": "macos-release-user"}
   ],
   "testPresets": [
     {"name": "native-release-user", "configurePreset": "native-release-user", "output": {"outputOnFailure": true}, "execution": {"noTestsAction": "error", "timeout": 90}},
     {"name": "win-release-user", "configurePreset": "win-release-user", "output": {"outputOnFailure": true}, "execution": {"noTestsAction": "error", "timeout": 90}},
+    {"name": "llvm-release-user", "configurePreset": "llvm-release-user", "output": {"outputOnFailure": true}, "execution": {"noTestsAction": "error", "timeout": 90}},
     {"name": "linux-release-user", "configurePreset": "linux-release-user", "output": {"outputOnFailure": true}, "execution": {"noTestsAction": "error", "timeout": 90}},
     {"name": "macos-release-user", "configurePreset": "macos-release-user", "output": {"outputOnFailure": true}, "execution": {"noTestsAction": "error", "timeout": 90}}
   ]

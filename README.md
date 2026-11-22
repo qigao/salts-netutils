@@ -544,10 +544,10 @@ cmake --build --preset install-native-release-user
 ```
 
 The native build uses the shared SDKs in place. `install-native-release-user`
-writes to `build/native-release-user/stage`. The existing GitHub Actions
-restore job still targets the earlier NuGet SDKs. Release CI needs the
-SaltsCNet extension published for its target profiles and a matching restore
-configuration.
+writes to `build/native-release-user/stage`. Release qualification builds
+SaltsCNet from `SALTS_CNET_REF` and restores each profile's released SDKs and
+vcpkg payload. The release archives include the compatible SaltsCNet SDK in
+`dependencies/salts-cnet`.
 
 `BUILD_TESTING` controls all test targets, and `BUILD_EXAMPLES` controls all
 examples, including the email clients. Email and MIME test directories own their
@@ -624,10 +624,7 @@ There is no silent fallback to the old naming or runtime model. Residual legacy 
 **Salts provides the network/runtime semantics. SaltsNet turns them into reusable protocol tools.**
 
 
-GitHub Packages policy: consumers must restore `Salts.Native` explicitly as latest; `SaltsNet.Native` does not embed versioned dependency metadata.
-
-Release: [1.1.0-rc.2 notes, breaking STUN migration and known limitations](docs/releases/1.1.0-rc.2.md).
-The full package SemVer is in `vcpkg.json`; CMake uses its numeric core (1.1.0).
+Release notes and SDK profiles are documented in [0.1.0](docs/releases/0.1.0.md).
 After merging, dispatch the native SDK workflow with `prepare_release=true`
 on the exact merged commit to build the candidate without publication.
 A separately authorized RC publication consumes

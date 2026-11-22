@@ -1,268 +1,215 @@
-name: Build and test SaltsNet native SDKs
+name: Build native SDK
 
 on:
   workflow_call:
     inputs:
-      version:
-        type: string
+      profile:
         required: true
+        type: string
+      runner:
+        required: true
+        type: string
+      host:
+        required: true
+        type: string
+      triplet:
+        required: true
+        type: string
+      preset:
+        required: true
+        type: string
+      cnet_preset:
+        required: true
+        type: string
+      android_abi:
+        type: string
+        default: ''
 
 permissions:
   contents: read
   packages: read
+  actions: read
 
 jobs:
-  build:
-    name: ${{ matrix.rid }}
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-24.04
-            rid: linux-x64
-            host: linux-x64
-            triplet: x64-linux
-            host_triplet: x64-linux
-            preset: ci-linux-release-user
-            cross: false
-          - runner: windows-2025
-            rid: windows-x64
-            host: windows-x64
-            triplet: x64-windows
-            host_triplet: x64-windows
-            preset: ci-win-release-user
-            cross: false
-          - runner: macos-15
-            rid: macos-arm64
-            host: macos-arm64
-            triplet: arm64-osx
-            host_triplet: arm64-osx
-            preset: ci-macos-release-user
-            cross: false
-          - runner: ubuntu-24.04
-            rid: android-arm64-v8a
-            host: linux-x64
-            triplet: arm64-android
-            host_triplet: x64-linux
-            preset: ci-android-sdk-release-user
-            host_preset: ci-host-release-user
-            cross: true
-          - runner: macos-15
-            rid: ios-arm64
-            host: macos-arm64
-            triplet: arm64-ios
-            host_triplet: arm64-osx
-            preset: ci-ios-sdk-release-user
-            host_preset: ci-macos-host-release-user
-            sysroot: iphoneos
-            cross: true
-          # Published upstream RC packages ship linux-arm64, not iOS simulator.
-          - runner: ubuntu-24.04-arm
-            rid: linux-arm64
-            host: linux-arm64
-            triplet: arm64-linux
-            host_triplet: arm64-linux
-            preset: ci-linux-arm64-release-user
-            cross: false
+  sdk:
+    name: ${{ inputs.profile }}
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
     env:
-      QIGAO_SDK_RID: ${{ matrix.rid }}
-      QIGAO_TARGET_TRIPLET: ${{ matrix.triplet }}
-      QIGAO_HOST_TRIPLET: ${{ matrix.host_triplet }}
-      QIGAO_IOS_SYSROOT: ${{ matrix.sysroot }}
+      SDK_PROFILE: ${{ inputs.profile }}
+      SDK_TRIPLET: ${{ inputs.triplet }}
+      SDK_PRESET: ${{ inputs.preset }}
+      CNET_PRESET: ${{ inputs.cnet_preset }}
+      SALTSCORE_ANDROID_ABI: ${{ inputs.android_abi }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Select iOS cache namespace
-        if: matrix.preset == 'ci-ios-sdk-release-user'
-        shell: bash
-        run: echo 'X_VCPKG_NUGET_ID_PREFIX=vcpkg-cache' >> "$GITHUB_ENV"
-      - name: Checkout immutable shared curl GitHub Packages client
-        uses: actions/checkout@v4
+          persist-credentials: false
+
+      - name: Read upstream pins
+        run: |
+          $inputs = ConvertFrom-StringData (Get-Content .env.example -Raw)
+          foreach ($key in @('VCPKG_CACHE_VERSION', 'SALTS_CNET_REF')) {
+            if (-not $inputs[$key]) { throw "Missing SDK pin $key" }
+            "$key=$($inputs[$key])" >> $env:GITHUB_ENV
+          }
+
+      - uses: actions/checkout@v4
         with:
           repository: qigao/vcpkg-cache
-          ref: b4952760bf85d666d834c5b0c75ff4d9d0f8ddad
-          path: build/vcpkg-cache-contract
+          ref: v${{ env.VCPKG_CACHE_VERSION }}
+          path: build/upstream/vcpkg-cache
           persist-credentials: false
-      - id: vcpkg-cache
-        uses: qigao/vcpkg-cache/.github/actions/setup-vcpkg-curl-cache@b4952760bf85d666d834c5b0c75ff4d9d0f8ddad
+
+      - uses: actions/checkout@v4
         with:
-          mode: read
-          triplet: ${{ matrix.runner == 'windows-2025' && 'qigao-x64-windows-v145' || matrix.triplet }}
-          host-triplet: ${{ matrix.runner == 'windows-2025' && 'qigao-x64-windows-v145' || matrix.host_triplet }}
-      - name: Restore published re2c using curl NuGet V3
-        uses: qigao/vcpkg-cache/.github/actions/setup-re2c-tools@b4952760bf85d666d834c5b0c75ff4d9d0f8ddad
-      - name: Prepare Linux tools
+          repository: qigao/salts-cnet
+          ref: ${{ env.SALTS_CNET_REF }}
+          path: build/upstream/salts-cnet
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Restore pinned SDKs and lexer generator
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SDK_HOST: ${{ inputs.host }}
+        run: |
+          python cmake/ci/restore-native-sdk.py --profile $env:SDK_PROFILE --triplet $env:SDK_TRIPLET --host $env:SDK_HOST
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: ./build/upstream/vcpkg-cache/.github/actions/setup-llvm-mingw
+        if: inputs.profile == 'windows-llvm-mingw-x64'
+        id: llvm-mingw
+
+      - name: Locate Visual Studio
+        if: runner.os == 'Windows'
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ($LASTEXITCODE -ne 0 -or !$vs) { throw 'Visual Studio C++ tools are required' }
+          "VSDEVCMD_BAT=$vs/Common7/Tools/VsDevCmd.bat" >> $env:GITHUB_ENV
+          'VSDEVCMD_ARCH=x64' >> $env:GITHUB_ENV
+
+      - name: Install Linux build tools
         if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ninja-build pkg-config nasm perl ccache
-      - name: Prepare macOS tools
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          set -euo pipefail
-          brew install ninja nasm ccache
-      - name: Prepare Windows tools
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          choco install ninja nasm strawberryperl ccache -y --no-progress
-          if ($LASTEXITCODE -ne 0) { throw 'Build tool installation failed' }
-          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
-          $vsInstall = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($vsInstall)) { throw 'MSVC x64 toolchain not found' }
-          "VSINSTALL=$vsInstall" >> $env:GITHUB_ENV
-          if (-not $env:VCPKG_ROOT -or -not $env:QIGAO_VCPKG_WINDOWS_TRIPLET) { throw 'Shared vcpkg environment is missing' }
-          "QIGAO_VCPKG_ROOT=$env:VCPKG_ROOT" >> $env:GITHUB_ENV
-          "QIGAO_TARGET_TRIPLET=$env:QIGAO_VCPKG_WINDOWS_TRIPLET" >> $env:GITHUB_ENV
-          "QIGAO_HOST_TRIPLET=$env:QIGAO_VCPKG_WINDOWS_TRIPLET" >> $env:GITHUB_ENV
-      - name: Configure ccache for this compiler and ABI
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $ccache = (Get-Command ccache -ErrorAction Stop).Source
-          & $ccache --version
-          if ($LASTEXITCODE -ne 0) { throw 'ccache is unavailable' }
-          "CCACHE_DIR=$(Join-Path $env:RUNNER_TEMP 'saltsnet-ccache')" >> $env:GITHUB_ENV
-          "CCACHE_MAXSIZE=512M" >> $env:GITHUB_ENV
-          "CCACHE_NODIRECT=true" >> $env:GITHUB_ENV
-          "CCACHE_COMPILERCHECK=content" >> $env:GITHUB_ENV
-          "CMAKE_C_COMPILER_LAUNCHER=$ccache" >> $env:GITHUB_ENV
-          "CMAKE_CXX_COMPILER_LAUNCHER=$ccache" >> $env:GITHUB_ENV
-          if ($IsWindows) { "CCACHE_COMPILERTYPE=msvc" >> $env:GITHUB_ENV }
-      - name: Restore ccache objects
-        uses: actions/cache@v4
+          sudo apt-get install --yes --no-install-recommends clang ninja-build
+
+      - uses: actions/download-artifact@v4
+        if: inputs.android_abi != ''
         with:
-          path: ${{ runner.temp }}/saltsnet-ccache
-          key: saltsnet-ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rid }}-${{ matrix.triplet }}-${{ steps.vcpkg-cache.outputs.cache_revision }}-${{ hashFiles('vcpkg.json', 'CMakeLists.txt', 'CMakeUserPresets.json', 'presets/**', 'CMakeOptions.cmake') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            saltsnet-ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ matrix.rid }}-${{ matrix.triplet }}-${{ steps.vcpkg-cache.outputs.cache_revision }}-${{ hashFiles('vcpkg.json', 'CMakeLists.txt', 'CMakeUserPresets.json', 'presets/**', 'CMakeOptions.cmake') }}-
-      - name: Begin ccache accounting
-        shell: pwsh
-        run: ccache --zero-stats
-      - name: Restore prerelease Salts 2.3, SaltsUtils 4.3 and re2c
-        shell: pwsh
+          name: linux-x64-lemon
+          path: build/host-tools
+
+      - name: Build pinned CNet SDK and qualify SaltsNet
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: ./cmake/ci/restore-native-sdk.ps1 -SaltsRid '${{ matrix.rid }}' -HostRid '${{ matrix.host }}'
-      - name: Verify CNet 2.3 strategy SDK and SaltsUtils 4.3 surface
-        shell: pwsh
+          LLVM_MINGW_ROOT: ${{ steps.llvm-mingw.outputs.root }}
         run: |
           $ErrorActionPreference = 'Stop'
-          foreach ($file in @(
-            (Join-Path $env:SALTS_ROOT 'include/cnet/client_pool.h'),
-            (Join-Path $env:SALTS_ROOT 'include/cnet/destination_policy.h'),
-            (Join-Path $env:SALTS_ROOT 'include/cnet/owner_placement.h'),
-            (Join-Path $env:SALTS_ROOT 'include/cnet/managed_dial.h'),
-            (Join-Path $env:SALTS_ROOT 'include/cnet/recovery_policy.h'),
-            (Join-Path $env:SALTS_ROOT 'include/cnet/sg_host.h'),
-            (Join-Path $env:SALTS_UTILS_ROOT 'lib/cmake/SaltsUtils/SaltsUtilsConfig.cmake')
-          )) {
-            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
-              throw "Missing CNet 2.3 / SaltsUtils 4.3 installed SDK contract: $file"
+          $PSNativeCommandUseErrorActionPreference = $true
+          $root = (Get-Location).Path.Replace('\', '/')
+          $source = "$root/build/upstream/salts-cnet"
+          $stage = "$root/build/$env:SDK_PRESET/stage"
+          $archiveDirectory = "$root/build/archives"
+          $cnet = "$root/build/upstream/$env:SDK_PROFILE/cnet"
+          $wrapper = "$source/cmake/WithVs.cmd"
+          function Invoke-NativeTool([string]$tool, [string[]]$arguments) {
+            if ($IsWindows) { & $wrapper $tool @arguments }
+            else { & $tool @arguments }
+          }
+
+          $env:VCPKG_TARGET_TRIPLET = $env:SDK_TRIPLET
+          $env:LLVM_NATIVE_TARGET_TRIPLET = $env:SDK_TRIPLET
+          $env:MSVC_TARGET_TRIPLET = $env:SDK_TRIPLET
+          $env:ANDROID_TARGET_TRIPLET = $env:SDK_TRIPLET
+          $env:INSTALL_PREFIX = $cnet
+          $env:LLVM_NATIVE_INSTALL_PREFIX = $cnet
+          $env:MSVC_INSTALL_PREFIX = $cnet
+          $env:ANDROID_INSTALL_PREFIX = $cnet
+          $env:LLVM_MINGW_TARGET = 'x86_64-w64-mingw32'
+          Push-Location $source
+          try {
+            Invoke-NativeTool cmake @('--preset', $env:CNET_PRESET, '-DBUILD_TESTS=OFF')
+            Invoke-NativeTool cmake @('--build', '--preset', $env:CNET_PRESET, '--parallel', '3')
+            Invoke-NativeTool cmake @('--build', '--preset', "install-$env:CNET_PRESET")
+          } finally { Pop-Location }
+
+          $env:SALTS_CNET_ROOT = $cnet
+          $cross = -not [string]::IsNullOrWhiteSpace($env:SALTSCORE_ANDROID_ABI)
+          $options = @('--preset', $env:SDK_PRESET)
+          if ($cross) {
+            tar xf build/host-tools/lemon.tar -C build/host-tools
+            $options += @('-DBUILD_TESTING=OFF', "-DLEMON_EXECUTABLE=$root/build/host-tools/lemon")
+          } else {
+            $options += '-DBUILD_TESTING=ON'
+          }
+          Invoke-NativeTool cmake $options
+          Invoke-NativeTool cmake @('--build', '--preset', $env:SDK_PRESET, '--parallel', '3')
+          if (-not $cross) {
+            Invoke-NativeTool ctest @('--preset', $env:SDK_PRESET, '--timeout', '180', '--parallel', '2')
+          }
+          Invoke-NativeTool cmake @('--build', '--preset', "install-$env:SDK_PRESET")
+          if (-not $cross) {
+            $consumerPreset = switch ($env:SDK_PROFILE) {
+              'windows-llvm-mingw-x64' { 'native-release-user' }
+              'windows-msvc-x64' { 'win-release-user' }
+              'macos-clang-arm64' { 'macos-release-user' }
+              default { 'llvm-release-user' }
+            }
+            Invoke-NativeTool pwsh @('-NoProfile', '-File', 'cmake/ci/verify-installed-sdk.ps1',
+              '-Preset', $consumerPreset, '-SaltsNetRoot', $stage, '-TargetTriplet', $env:SDK_TRIPLET)
+          } else {
+            $readelf = Join-Path $env:ANDROID_NDK_HOME 'toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf'
+            $libraries = Get-ChildItem -LiteralPath "$stage/lib" -Filter '*.so' -File
+            if (!$libraries) { throw 'No Android shared libraries were installed' }
+            foreach ($library in $libraries) {
+              $segments = & $readelf --program-headers --wide $library.FullName | Select-String '^\s*LOAD\s+.+\s0x([0-9a-fA-F]+)\s*$'
+              if (!$segments) { throw "No LOAD segments in $($library.Name)" }
+              foreach ($segment in $segments) {
+                if ([Convert]::ToInt32($segment.Matches[0].Groups[1].Value, 16) -lt 16384) {
+                  throw "Unaligned ELF LOAD segment in $($library.Name)"
+                }
+              }
             }
           }
-      - name: Build host tools for cross compilation
-        if: matrix.cross
-        shell: bash
-        run: |
-          set -euo pipefail
-          cmake --preset '${{ matrix.host_preset }}'
-          cmake --build --preset '${{ matrix.host_preset }}' --parallel 2
-      - name: Configure and build Unix graph
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          set -euo pipefail
-          cmake --preset '${{ matrix.preset }}'
-          cmake --build --preset '${{ matrix.preset }}' --parallel 2
-      - name: Configure and build Windows graph
-        if: runner.os == 'Windows'
-        shell: cmd
-        run: |
-          call "%VSINSTALL%\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 >nul
-          if errorlevel 1 exit /b 1
-          set "VCPKG_ROOT=%QIGAO_VCPKG_ROOT%"
-          cmake --preset "${{ matrix.preset }}"
-          if errorlevel 1 exit /b 1
-          cmake --build --preset "${{ matrix.preset }}" --parallel 2
-          if errorlevel 1 exit /b 1
-      - name: Run Unix tests
-        if: runner.os != 'Windows' && !matrix.cross
-        shell: bash
-        run: ctest --preset '${{ matrix.preset }}' --no-tests=error --output-on-failure --timeout 180 --parallel 2
-      - name: Run Windows tests
-        if: runner.os == 'Windows'
-        shell: cmd
-        run: |
-          call "%VSINSTALL%\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 >nul
-          if errorlevel 1 exit /b 1
-          ctest --preset "${{ matrix.preset }}" --no-tests=error --output-on-failure --timeout 180 --parallel 2
-          if errorlevel 1 exit /b 1
-      - name: Install Unix SDK
-        if: runner.os != 'Windows'
-        shell: bash
-        run: cmake --build --preset 'install-${{ matrix.preset }}' --parallel 2
-      - name: Install Windows SDK
-        if: runner.os == 'Windows'
-        shell: cmd
-        run: |
-          call "%VSINSTALL%\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 >nul
-          if errorlevel 1 exit /b 1
-          set "VCPKG_ROOT=%QIGAO_VCPKG_ROOT%"
-          cmake --build --preset "install-${{ matrix.preset }}" --parallel 2
-          if errorlevel 1 exit /b 1
-      - name: Verify isolated installed SDK consumers (Unix)
-        if: runner.os != 'Windows' && !matrix.cross
-        shell: pwsh
-        run: ./cmake/ci/verify-installed-sdk.ps1
-      - name: Verify isolated installed SDK consumers (MSVC)
-        if: runner.os == 'Windows'
-        shell: cmd
-        run: |
-          call "%VSINSTALL%\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 >nul
-          if errorlevel 1 exit /b 1
-          set "VCPKG_ROOT=%QIGAO_VCPKG_ROOT%"
-          pwsh -NoProfile -File cmake/ci/verify-installed-sdk.ps1
-          if errorlevel 1 exit /b 1
-      - name: Record SDK provenance
-        shell: pwsh
-        env:
-          PACKAGE_VERSION: ${{ inputs.version }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $prefix = Join-Path $env:GITHUB_WORKSPACE "stage/sdk/$env:QIGAO_SDK_RID"
-          $commit = git rev-parse HEAD
-          if ($LASTEXITCODE -ne 0) { throw 'Could not read source commit' }
-          @("version=$env:PACKAGE_VERSION", "commit=$commit", "rid=$env:QIGAO_SDK_RID",
-            "triplet=$env:QIGAO_TARGET_TRIPLET", 'build_type=Release',
-            "salts=$env:SALTS_VERSION", "salts_utils=$env:SALTS_UTILS_VERSION", "re2c=$env:RE2C_VERSION") |
-            Set-Content -LiteralPath (Join-Path $prefix 'saltsnet-sdk-manifest.txt')
-      - name: Report compiler cache results
-        if: always()
-        shell: pwsh
-        run: |
-          if (Get-Command ccache -ErrorAction SilentlyContinue) {
-            ccache --show-stats
+
+          New-Item -ItemType Directory -Path "$stage/dependencies" | Out-Null
+          Copy-Item -Recurse -LiteralPath $cnet -Destination "$stage/dependencies/salts-cnet"
+          foreach ($license in @('LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md')) {
+            if (Test-Path -LiteralPath $license -PathType Leaf) { Copy-Item -LiteralPath $license -Destination $stage }
           }
+          $version = (Get-Content vcpkg.json -Raw | ConvertFrom-Json).'version-semver'
+          @{
+            version = $version; commit = $env:GITHUB_SHA; profile = $env:SDK_PROFILE
+            triplet = $env:SDK_TRIPLET; native_tests = -not $cross
+            dependencies = (Get-Content $env:SALTSNET_INPUTS -Raw | ConvertFrom-Json)
+            cnet = @{version=$env:SALTS_CNET_VERSION; commit=$env:SALTS_CNET_REF; root='dependencies/salts-cnet'}
+          } | ConvertTo-Json -Depth 6 | Set-Content "$stage/saltsnet-sdk-manifest.json" -Encoding utf8
+          New-Item -ItemType Directory -Path $archiveDirectory | Out-Null
+          tar cf "$archiveDirectory/salts-netutils-$version-$env:SDK_PROFILE.tar" -C $stage .
+          if ($env:SDK_PROFILE -eq 'linux-clang-x64') {
+            tar cf "$archiveDirectory/lemon.tar" -C "$root/build/$env:SDK_PRESET/bin" lemon
+          }
+
       - uses: actions/upload-artifact@v4
         with:
-          name: saltsnet-sdk-${{ matrix.rid }}
-          path: stage/sdk
+          name: salts-netutils-sdk-${{ inputs.profile }}
+          path: build/archives/salts-netutils-*.tar
+          compression-level: 0
           if-no-files-found: error
-          compression-level: 9
+
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: inputs.profile == 'linux-clang-x64'
         with:
-          name: native-diagnostics-${{ matrix.rid }}
-          path: |
-            build/ci-sdk/${{ matrix.rid }}/CMakeFiles/CMakeConfigureLog.yaml
-            build/ci-sdk/${{ matrix.rid }}/vcpkg-manifest-install.log
-            build/ci-sdk/${{ matrix.rid }}/Testing/Temporary
-          if-no-files-found: warn
+          name: linux-x64-lemon
+          path: build/archives/lemon.tar
+          if-no-files-found: error

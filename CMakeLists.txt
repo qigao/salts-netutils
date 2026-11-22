@@ -9,7 +9,7 @@ endif()
 # SaltsNet Project - Network tools built on Salts
 project(
   SaltsNet
-  VERSION 1.1.0
+  VERSION 0.1.0
   LANGUAGES C CXX)
 
 # Project configuration - output directories
@@ -22,7 +22,7 @@ get_filename_component(CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}" ABSOLUTE)
 
 # Project description
 set(PROJECT_DESCRIPTION "High-performance networking library")
-set(PROJECT_HOMEPAGE_URL "https://github.com/qigao/salts-net")
+set(PROJECT_HOMEPAGE_URL "https://github.com/qigao/salts-netutils")
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 # Language standards - unified approach
@@ -31,6 +31,10 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+if(ANDROID)
+  add_link_options("LINKER:-z,max-page-size=16384" "LINKER:-z,common-page-size=16384")
+endif()
 
 if(MSVC)
   # Align with Salts 2.3: the dash spelling is compatible with the MSVC ccache launcher.
