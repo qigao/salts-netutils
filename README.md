@@ -49,6 +49,9 @@ SaltsNet is the **network extension layer**. It is intentionally separate from H
 
 The URI parser is a concrete package component, but it is not a top-level ecosystem layer or architectural pillar.
 
+Cryptographic and certificate support is recorded per protocol in the
+[compatibility matrix](docs/CRYPTO_COMPATIBILITY_MATRIX.md).
+
 ### ASN.1 ownership
 
 SNMP, LDAP, USM, and X.509 consume `Salts::ASN1` directly. SaltsNet no longer
@@ -326,10 +329,9 @@ ranges using `Salts.Native Version="2.3.0-*"` and
 SHA-qualified Linux-only verification snapshots (which can sort *above*
 `rc.1` or `rc.2`), the CI restore dynamically selects the newest **official numeric RC tag**, or
 the **stable release** when available, from GitHub Releases. It
-passes these selected identities into the floating MSBuild projects only for
-qualification, so no fixed RC number is committed. The restore uses
-`--no-cache --force-evaluate`, selects SDK roots from NuGet's actual
-`project.assets.json`, verifies the chosen release identities, and
+fetches the selected official release and exact GitHub Packages NuGet V3
+payloads with authenticated `curl`, compares their SHA256 digests, validates
+the package archive and selects the requested SDK roots; it
 **fails fast** if the requested prerelease
 or target/host SDK is unavailable. It does not fall back to Salts 2.2 or
 SaltsUtils 4.2. Rebuild all linked native dependencies against the same
@@ -631,3 +633,9 @@ on the exact merged commit to build the candidate without publication.
 A separately authorized RC publication consumes
 that successful run via `publish_from_run` on the matching immutable tag; it
 does not rebuild the package. RC branches/tags do not publish automatically.
+
+For local CLI restore, check out the exact pinned `qigao/vcpkg-cache` commit into
+`build/vcpkg-cache-contract`, install Python 3.12 and `curl`, provide
+`GITHUB_TOKEN` with `read:packages`, and establish the platform-specific
+`RE2C_ROOT` and `RE2C_PACKAGE_VERSION` from its curl-based re2c setup.
+CI performs all of these steps from the immutable shared action SHA.
