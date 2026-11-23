@@ -1,0 +1,22 @@
+{
+  "name": "SaltsLB",
+  "kind": "shared",
+  "sources": {
+    "files": ["src/salts_lb.c", "src/salts_lb_sg.c"]
+  },
+  "public": {
+    "deps": ["salts_cnet"],
+    "includeDirs": ["include"]
+  },
+  "private": {
+    "deps": ["saltsbase_core", "saltsnet_sg_host"],
+    "defines": { "SALTSNET_LB_C_API": "__declspec(dllexport)" }
+  },
+  "options": { "symbolVisibility": "hidden", "visibilityInlinesHidden": true },
+  "install": {
+    "headers": [
+      { "from": "include/*.h", "to": "include" }
+    ]
+  },
+  "include": ["tests/module.json", "examples/module.json"]
+}

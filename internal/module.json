@@ -1,0 +1,15 @@
+{
+  "name": "saltsnet_sg_host",
+  "kind": "static",
+  "sources": {
+    "files": ["sg_host.c"]
+  },
+  "public": {
+    "includeDirs": ["."]
+  },
+  "private": {
+    "deps": ["salts_cnet", "saltsbase_core"]
+  },
+  "visibility": ["SaltsLB", "SaltsTCPProxy"],
+  "options": { "symbolVisibility": "hidden" }
+}

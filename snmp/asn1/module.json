@@ -1,0 +1,69 @@
+{
+  "name": "saltsnet_snmp_support",
+  "kind": "shared",
+  "sources": {
+    "files": [
+      "src/ast.c",
+      "src/mib_compiler.c",
+      "src/crypto_random.c",
+      "src/x509_cert.c",
+      "$builddir/generated/snmp/asn1/scanner_gen.c",
+      "$builddir/generated/snmp/asn1/parser.c"
+    ]
+  },
+  "public": {
+    "deps": ["saltsnet_snmp_support_headers", "saltsbase_core"]
+  },
+  "private": {
+    "deps": ["saltsbase_asn1"],
+    "defines": { "SALTSNET_ASN1_C_API": "__declspec(dllexport)" },
+    "includeDirs": ["parser", "src", "$builddir/generated/snmp/asn1"]
+  },
+  "options": { "symbolVisibility": "hidden", "visibilityInlinesHidden": true },
+  "include": ["test/module.json"],
+  "preTasks": [
+    {
+      "name": "snmp_asn1_scanner",
+      "tool": "re2c",
+      "inputs": ["parser/scanner.re"],
+      "outputs": ["$builddir/generated/snmp/asn1/scanner_gen.c"],
+      "args": ["-o", "$builddir/generated/snmp/asn1/scanner_gen.c", "$moduledir/parser/scanner.re"]
+    },
+    {
+      "name": "snmp_asn1_parser",
+      "tool": "lemon",
+      "inputs": ["parser/parser.y", "${envPath:LEMON_ROOT}/share/lemon/lempar.c"],
+      "outputs": ["$builddir/generated/snmp/asn1/parser.c", "$builddir/generated/snmp/asn1/parser.h"],
+      "args": [
+        "-q",
+        "-d$builddir/generated/snmp/asn1",
+        "-T${envPath:LEMON_ROOT}/share/lemon/lempar.c",
+        "$moduledir/parser/parser.y"
+      ]
+    }
+  ],
+  "targets": {
+    "saltsnet_snmp_support_headers": {
+      "kind": "header_only",
+      "visibility": ["saltsnet_snmp_support"],
+      "public": {
+        "includeDirs": ["include", "include/asn1"]
+      },
+      "install": {
+        "headers": [
+          { "from": "include/*.h", "to": "include" },
+          { "from": "include/asn1/*.h", "to": "include/asn1" }
+        ]
+      }
+    },
+    "mib_compiler": {
+      "kind": "executable",
+      "sources": {
+        "files": ["tools/mib_compiler_main.c"]
+      },
+      "private": {
+        "deps": ["saltsnet_snmp_support", "saltsbase_core"]
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "targets": {
+    "test_ldap": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_ldap.c"]
+      },
+      "private": {
+        "deps": ["ldap_client", "saltsbase_asn1", "saltsbase_core", "saltsbase_tinytest"]
+      },
+      "test": {}
+    },
+    "test_ldap_cnet": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_ldap_cnet.c"]
+      },
+      "private": {
+        "deps": ["ldap_client", "saltsbase_core", "saltsbase_tinytest"],
+        "libs": ["ws2_32"]
+      },
+      "test": {}
+    },
+    "test_ldap_integration": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_ldap_integration.c"]
+      },
+      "private": {
+        "deps": ["ldap_client", "saltsbase_asn1", "saltsbase_core", "saltsbase_tinytest"]
+      },
+      "testOnly": true
+    }
+  }
+}

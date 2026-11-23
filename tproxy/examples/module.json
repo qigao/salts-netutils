@@ -1,0 +1,13 @@
+{
+  "targets": {
+    "salts_tcp_proxy_example": {
+      "kind": "executable",
+      "sources": {
+        "files": ["salts_tcp_proxy_example.c"]
+      },
+      "private": {
+        "deps": ["SaltsTCPProxy", "saltsbase_core"]
+      }
+    }
+  }
+}

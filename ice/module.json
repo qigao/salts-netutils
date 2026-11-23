@@ -1,0 +1,29 @@
+{
+  "name": "SaltsICE",
+  "kind": "shared",
+  "sources": {
+    "files": [
+      "src/ice_cnet_datagram.c",
+      "src/salts_stun.c",
+      "src/stun_request.c",
+      "src/salts_ice.c",
+      "src/salts_turn.c"
+    ]
+  },
+  "public": {
+    "deps": ["salts_cnet", "cmeta_cmeta", "saltsbase_core"],
+    "includeDirs": ["include"]
+  },
+  "private": {
+    "deps": ["salts_crypto"],
+    "libs": ["ws2_32", "iphlpapi", "psapi"],
+    "defines": { "SALTSNET_ICE_C_API": "__declspec(dllexport)" }
+  },
+  "options": { "symbolVisibility": "hidden", "visibilityInlinesHidden": true },
+  "install": {
+    "headers": [
+      { "from": "include/ice/*.h", "to": "include/ice" }
+    ]
+  },
+  "include": ["tests/module.json", "examples/module.json"]
+}

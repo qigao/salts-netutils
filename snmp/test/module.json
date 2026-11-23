@@ -1,0 +1,66 @@
+{
+  "forEach": [
+    {
+      "files": ["test_asn1_roundtrip.c", "test_context_specific.c"],
+      "target": {
+        "kind": "executable",
+        "private": {
+          "deps": ["saltsbase_asn1", "saltsbase_tinytest"]
+        },
+        "test": {}
+      }
+    }
+  ],
+  "targets": {
+    "test_snmp": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_snmp.c"]
+      },
+      "private": {
+        "deps": ["SaltsSNMP", "saltsbase_core", "saltsbase_tinytest"]
+      },
+      "test": {}
+    },
+    "test_snmp_cnet": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_snmp_cnet.c"]
+      },
+      "private": {
+        "deps": ["SaltsSNMP", "saltsbase_core", "saltsbase_tinytest"],
+        "includeDirs": ["../src"],
+        "libs": ["ws2_32"]
+      },
+      "test": {}
+    },
+    "test_snmp_v3": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_snmp_v3.c"]
+      },
+      "private": {
+        "deps": ["SaltsSNMP", "saltsbase_asn1", "saltsbase_tinytest"]
+      },
+      "test": {}
+    },
+    "test_snmp_public_header_cpp": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_snmp_public_header.cpp"]
+      },
+      "private": {
+        "deps": ["SaltsSNMP"]
+      },
+      "variants": [
+        {
+          "when": { "driver": "msvc" },
+          "private": {
+            "flags": ["/Zc:preprocessor"]
+          }
+        }
+      ],
+      "test": {}
+    }
+  }
+}

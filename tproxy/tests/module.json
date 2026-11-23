@@ -1,0 +1,41 @@
+{
+  "targets": {
+    "test_salts_tcp_proxy": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_salts_tcp_proxy.c"]
+      },
+      "private": {
+        "deps": ["SaltsTCPProxy", "saltsbase_core", "saltsbase_tinytest"],
+        "libs": ["ws2_32"]
+      },
+      "test": { "name": "salts_tcp_proxy" }
+    },
+    "saltsnet_sg_pipeline_test": {
+      "kind": "executable",
+      "sources": {
+        "files": ["$root/tests/sg_pipeline_test.c"]
+      },
+      "private": {
+        "deps": ["SaltsLB", "SaltsTCPProxy", "saltsbase_core", "saltsbase_tinytest"],
+        "libs": ["ws2_32"]
+      },
+      "test": { "timeout": 30 }
+    },
+    "benchmark_salts_tcp_proxy_sg": {
+      "kind": "executable",
+      "sources": {
+        "files": ["benchmark_salts_tcp_proxy_sg.c"]
+      },
+      "private": {
+        "deps": ["SaltsTCPProxy", "saltsbase_core", "saltsbase_tinytest"],
+        "libs": ["ws2_32"]
+      },
+      "when": { "config": "benchmark" },
+      "test": {
+        "timeout": 120,
+        "labels": ["benchmark"]
+      }
+    }
+  }
+}

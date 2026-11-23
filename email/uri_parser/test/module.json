@@ -1,0 +1,14 @@
+{
+  "forEach": [
+    {
+      "files": ["test*.c"],
+      "target": {
+        "kind": "executable",
+        "private": {
+          "deps": ["uri_parser", "saltsbase_tinytest"]
+        },
+        "test": {}
+      }
+    }
+  ]
+}

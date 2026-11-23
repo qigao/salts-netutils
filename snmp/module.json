@@ -1,0 +1,34 @@
+{
+  "name": "SaltsSNMP",
+  "kind": "shared",
+  "sources": {
+    "files": [
+      "src/snmp_parser.c",
+      "src/snmp_builder.c",
+      "src/snmp_client.c",
+      "src/snmp_usm.c",
+      "src/snmp_usm_wire.c"
+    ]
+  },
+  "public": {
+    "deps": ["saltsbase_core", "cmeta_cmeta"],
+    "includeDirs": ["include"]
+  },
+  "private": {
+    "deps": ["salts_cnet", "saltsbase_asn1", "salts_crypto"],
+    "defines": { "SALTSNET_SNMP_C_API": "__declspec(dllexport)" }
+  },
+  "options": { "symbolVisibility": "hidden", "visibilityInlinesHidden": true },
+  "install": {
+    "headers": [
+      { "from": "include/salts_snmp.h", "to": "include" },
+      { "from": "include/snmp_types.h", "to": "include" },
+      { "from": "include/snmp_parser.h", "to": "include" },
+      { "from": "include/snmp_builder.h", "to": "include" },
+      { "from": "include/snmp_client.h", "to": "include" },
+      { "from": "include/snmp_usm.h", "to": "include" },
+      { "from": "include/snmp_api.h", "to": "include" }
+    ]
+  },
+  "include": ["asn1/module.json", "test/module.json", "examples/module.json"]
+}

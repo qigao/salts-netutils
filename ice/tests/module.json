@@ -1,0 +1,131 @@
+{
+  "targets": {
+    "test_stun_request": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_stun_request.c"]
+      },
+      "private": {
+        "deps": ["SaltsICE", "saltsbase_core", "saltsbase_tinytest"],
+        "libs": ["ws2_32"]
+      },
+      "test": { "name": "stun_request" }
+    },
+    "test_ice_stun_gather": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_ice_stun_gather.c"]
+      },
+      "private": {
+        "deps": ["SaltsICE", "saltsbase_core", "saltsbase_tinytest"],
+        "libs": ["ws2_32"]
+      },
+      "test": { "name": "ice_stun_gather" }
+    },
+    "test_ice_cnet_sg": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_ice_cnet_sg.c", "../src/ice_cnet_datagram.c", "../src/salts_stun.c"]
+      },
+      "private": {
+        "deps": ["SaltsICE", "salts_cnet", "saltsbase_core", "salts_crypto", "saltsbase_tinytest"],
+        "includeDirs": ["../include", "../src"],
+        "libs": ["ws2_32"]
+      },
+      "test": { "name": "ice_cnet_sg" }
+    },
+    "test_ice_cnet_23": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_ice_cnet_23.c", "../src/ice_cnet_datagram.c"]
+      },
+      "private": {
+        "deps": ["salts_cnet", "saltsbase_core", "saltsbase_tinytest"],
+        "includeDirs": ["../src"],
+        "libs": ["ws2_32"]
+      },
+      "test": { "name": "ice_cnet_23" }
+    },
+    "test_stun_cnet": {
+      "kind": "executable",
+      "sources": {
+        "files": [
+          "test_stun_cnet.c",
+          "../src/ice_cnet_datagram.c",
+          "../src/salts_stun.c",
+          "../src/stun_request.c"
+        ]
+      },
+      "private": {
+        "deps": ["salts_cnet", "saltsbase_core", "salts_crypto", "saltsbase_tinytest"],
+        "includeDirs": ["../include", "../src"],
+        "libs": ["ws2_32"]
+      },
+      "test": { "name": "stun_cnet" }
+    },
+    "test_stun": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_stun.c", "../src/ice_cnet_datagram.c", "../src/salts_stun.c"]
+      },
+      "private": {
+        "deps": ["salts_cnet", "saltsbase_core", "salts_crypto", "saltsbase_tinytest"],
+        "includeDirs": ["../include", "../src"],
+        "libs": ["ws2_32"]
+      },
+      "test": { "name": "stun" }
+    },
+    "test_turn": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_turn.c", "../src/ice_cnet_datagram.c", "../src/salts_stun.c", "../src/salts_turn.c"]
+      },
+      "private": {
+        "deps": ["salts_cnet", "saltsbase_core", "salts_crypto", "saltsbase_tinytest"],
+        "includeDirs": ["../include", "../src"],
+        "libs": ["ws2_32"]
+      },
+      "test": { "name": "turn" }
+    },
+    "test_ice": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_ice.c"]
+      },
+      "private": {
+        "deps": ["SaltsICE", "saltsbase_core", "saltsbase_tinytest"],
+        "includeDirs": ["../src"],
+        "libs": ["ws2_32"]
+      },
+      "test": { "name": "ice" }
+    },
+    "test_ice_public_header": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_ice_public_header.cpp"]
+      },
+      "private": {
+        "deps": ["SaltsICE"]
+      },
+      "variants": [
+        {
+          "when": { "driver": "msvc" },
+          "private": {
+            "flags": ["/Zc:preprocessor"]
+          }
+        }
+      ],
+      "test": { "name": "ice_public_header" }
+    },
+    "saltsnet_cnet23_strategy_test": {
+      "kind": "executable",
+      "sources": {
+        "files": ["$root/tests/cnet_23_strategy_test.c"]
+      },
+      "private": {
+        "deps": ["salts_cnet"]
+      },
+      "test": {}
+    }
+  }
+}

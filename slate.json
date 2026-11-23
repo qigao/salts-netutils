@@ -1,0 +1,45 @@
+{
+  "include": ["slates/Platforms.json", "slates/Tools.json"],
+  "env": [
+    "LLVM_MINGW_ROOT",
+    "VSDEVCMD_BAT",
+    "VCPKG_INSTALLED_DIR",
+    "SALTS_BASE_ROOT",
+    "CMETA_ROOT",
+    "SALTS_CNET_ROOT",
+    "SALTSNET_RE2C_ROOT",
+    "LEMON_ROOT"
+  ],
+  "modules": ["third_party", "ice", "snmp", "ldap", "email", "internal", "lb", "tproxy"],
+  "defaultPreset": "release",
+  "presets": {
+    "base": {
+      "targetPlatform": "windows-x64",
+      "toolchain": "llvm-mingw-x64",
+      "cStd": "c11",
+      "cxxStd": "c++17",
+      "tests": false
+    },
+    "release": {
+      "inherits": "base",
+      "config": "release",
+      "defines": { "NDEBUG": null },
+      "options": { "optimization": "speed" }
+    },
+    "debug": {
+      "inherits": "base",
+      "config": "debug",
+      "options": { "optimization": "none", "debugInfo": "full" }
+    },
+    "tests": { "inherits": "release", "tests": true },
+    "debug-tests": { "inherits": "debug", "tests": true },
+    "benchmark": { "inherits": "release", "config": "benchmark", "tests": true },
+    "msvc-release": {
+      "inherits": "release",
+      "toolchain": "msvc-x64",
+      "vsDevCmd": "${envPath:VSDEVCMD_BAT}",
+      "flags": ["-experimental:c11atomics"]
+    },
+    "msvc-benchmark": { "inherits": "msvc-release", "config": "benchmark", "tests": true }
+  }
+}

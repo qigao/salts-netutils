@@ -1,0 +1,14 @@
+{
+  "forEach": [
+    {
+      "files": ["test_mime_*.c"],
+      "target": {
+        "kind": "executable",
+        "private": {
+          "deps": ["mime_parser", "saltsbase_tinytest"]
+        },
+        "test": {}
+      }
+    }
+  ]
+}

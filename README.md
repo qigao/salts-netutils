@@ -525,9 +525,10 @@ prefix. Its CMake package exposes `SaltsCNet_LEGACY_SNMP_CRYPTO`.
 The `native-release-user` preset uses LLVM-MinGW and the preinstalled
 `qigao-x64-windows-llvm-mingw` payload. The `msvc-release-user` preset uses
 MSVC and the `x64-windows` payload in an x64 `VsDevCmd.bat` environment.
-Select matching SDK roots in `.env` for each compiler. `RE2C_ROOT` points
-to the host tools directory containing `bin/re2c.exe` on Windows. CMake
-3.27 or newer reads the dependency paths from the parent environment.
+Select matching SDK roots in `.env` for each compiler. Set `RE2C_ROOT` to the
+host payload root reported by the vcpkg-cache restore of `Qigao.Re2c.Binary`.
+On Windows this directory contains `bin/re2c.exe`. CMake 3.27 or newer reads
+the dependency paths from the parent environment.
 
 Load `.env` from PowerShell and run the LLVM-MinGW presets:
 
@@ -570,6 +571,51 @@ because public headers and binary imports use the split providers. To roll
 back, rebuild the previous SaltsNet revision against its matching SDKs.
 
 Android device testing and LLDB notes are documented in [tools/android-test.md](tools/android-test.md).
+
+## Build with Slate
+
+Slate 0.1.14 and Ninja provide a local Windows x64 build for the libraries,
+tools, examples, and formal tests. Use the matching preinstalled SDKs in
+[`.env.example`](.env.example), including the SaltsCNet build with SNMPv3
+crypto. Set `VCPKG_INSTALLED_DIR` to the restored vcpkg library tree. Set
+`SALTSNET_RE2C_ROOT` and `LEMON_ROOT` in the repository `.env` to the host payload roots
+reported by vcpkg-cache for `Qigao.Re2c.Binary` and `Qigao.Lemon.Binary`.
+Use the same re2c receipt root for CMake's `RE2C_ROOT`. Slate resolves Lemon
+and `lempar.c` from the same host payload.
+Existing process variables take precedence. The default `release`
+preset selects LLVM-MinGW. Use `msvc-release` with `VSDEVCMD_BAT` and an
+MSVC-matched set of SDK paths.
+
+```powershell
+slate doctor --preset release
+slate build --preset release
+slate build --preset debug
+slate test --preset tests --list
+slate test --preset tests
+slate test --preset benchmark --label benchmark
+```
+
+Use `debug-tests` for debug test runs and `msvc-benchmark` for the MSVC
+benchmark. `slate build --preset tests` builds the LDAP integration
+executable for manual runs against a configured server.
+Slate stages the runtime DLLs next to the binaries under `out/`. The following
+command stages the public libraries, headers, and MIB compiler in
+`out/install-release/stage`.
+
+```powershell
+slate install --preset release --build-dir out/install-release --components runtime,dev `
+  --targets SaltsICE SaltsSNMP saltsnet_snmp_support mib_compiler ldap_client SaltsEmail SaltsLB SaltsTCPProxy
+```
+
+The layout follows `http-services`. `slates/` holds platform and host tool
+definitions, `third_party/module.json` describes the preinstalled SDKs, and
+each module owns its build and test targets. The manifests record re2c and
+Lemon inputs and outputs so Ninja can rebuild generated files. Slate uses its
+built-in naming for Windows DLLs and the existing public export annotations.
+Maintain source, dependency, and test changes in both build descriptions.
+Use the CMake presets for CI, the CMake package export, SDK releases, and all other
+platforms. To switch a local build back to CMake, use the original preset
+and its separate `build/` tree.
 
 ## Using SaltsNet from CMake
 

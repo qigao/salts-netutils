@@ -1,0 +1,31 @@
+{
+  "kind": "static",
+  "sources": {
+    "files": ["src/uri_parser.c", "$builddir/generated/email/uri_parser/uri_lexer_gen.c"]
+  },
+  "public": {
+    "includeDirs": ["include"]
+  },
+  "private": {
+    "includeDirs": ["parser", "$builddir/generated/email/uri_parser"]
+  },
+  "install": {
+    "headers": [
+      { "from": "include/*.h", "to": "include" }
+    ]
+  },
+  "include": ["test/module.json"],
+  "preTasks": [
+    {
+      "name": "uri_lexer",
+      "tool": "re2c",
+      "inputs": ["parser/uri_lexer.re"],
+      "outputs": ["$builddir/generated/email/uri_parser/uri_lexer_gen.c"],
+      "args": [
+        "-o",
+        "$builddir/generated/email/uri_parser/uri_lexer_gen.c",
+        "$moduledir/parser/uri_lexer.re"
+      ]
+    }
+  ]
+}

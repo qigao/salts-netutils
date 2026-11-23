@@ -1,0 +1,24 @@
+{
+  "name": "SaltsEmail",
+  "kind": "static",
+  "sources": {
+    "files": [
+      "src/email_client.c",
+      "src/email_cnet_transport.c",
+      "src/email_imap.c",
+      "src/email_message.c",
+      "src/email_pop3.c",
+      "src/email_smtp.c"
+    ]
+  },
+  "public": {
+    "deps": ["mime_parser", "salts_cnet"],
+    "includeDirs": ["include"]
+  },
+  "install": {
+    "headers": [
+      { "from": "include/email/*.h", "to": "include/email" }
+    ]
+  },
+  "include": ["uri_parser/module.json", "mime_parser/module.json", "test/module.json", "examples/module.json"]
+}

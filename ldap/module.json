@@ -1,0 +1,22 @@
+{
+  "name": "ldap_client",
+  "kind": "shared",
+  "sources": {
+    "files": ["src/ldap_builder.c", "src/ldap_client.c", "src/ldap_parser.c"]
+  },
+  "public": {
+    "deps": ["saltsbase_core"],
+    "includeDirs": ["include"]
+  },
+  "private": {
+    "deps": ["salts_cnet", "saltsbase_asn1"],
+    "defines": { "SALTSNET_LDAP_C_API": "__declspec(dllexport)" }
+  },
+  "options": { "symbolVisibility": "hidden", "visibilityInlinesHidden": true },
+  "install": {
+    "headers": [
+      { "from": "include/*.h", "to": "include/ldap" }
+    ]
+  },
+  "include": ["tests/module.json"]
+}

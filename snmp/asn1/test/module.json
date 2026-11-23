@@ -1,0 +1,14 @@
+{
+  "forEach": [
+    {
+      "files": ["test_crypto_random.c", "test_x509_integration.c"],
+      "target": {
+        "kind": "executable",
+        "private": {
+          "deps": ["saltsnet_snmp_support", "saltsbase_tinytest"]
+        },
+        "test": {}
+      }
+    }
+  ]
+}

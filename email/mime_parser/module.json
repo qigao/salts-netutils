@@ -1,0 +1,28 @@
+{
+  "kind": "static",
+  "sources": {
+    "files": [
+      "src/mime_content_disposition.c",
+      "src/mime_encoded_word.c",
+      "src/mime_mhtml.c",
+      "src/mime_parser.c",
+      "src/mime_rfc2231.c",
+      "src/mime_rfc2822.c",
+      "src/mime_smime.c",
+      "src/mime_utils.c"
+    ]
+  },
+  "public": {
+    "deps": ["saltsbase_core"],
+    "includeDirs": ["include"]
+  },
+  "private": {
+    "deps": ["uri_parser"]
+  },
+  "install": {
+    "headers": [
+      { "from": "include/*.h", "to": "include" }
+    ]
+  },
+  "include": ["test/module.json"]
+}

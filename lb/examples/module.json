@@ -1,0 +1,22 @@
+{
+  "targets": {
+    "salts_lb_example": {
+      "kind": "executable",
+      "sources": {
+        "files": ["salts_lb_example.c"]
+      },
+      "private": {
+        "deps": ["SaltsLB"]
+      }
+    },
+    "salts_lb_worker": {
+      "kind": "executable",
+      "sources": {
+        "files": ["salts_lb_worker.c"]
+      },
+      "private": {
+        "deps": ["salts_cnet", "saltsbase_core"]
+      }
+    }
+  }
+}

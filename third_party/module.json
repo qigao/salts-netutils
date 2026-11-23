@@ -1,0 +1,200 @@
+{
+  "targets": {
+    "saltsbase_core": {
+      "kind": "prebuilt",
+      "public": {
+        "requiredIncludeDirs": ["${envPath:SALTS_BASE_ROOT}/include"],
+        "defines": { "HAS_ZSTD": "1" }
+      },
+      "variants": [
+        {
+          "when": { "driver": "msvc" },
+          "public": {
+            "libs": ["${envPath:SALTS_BASE_ROOT}/lib/salts.lib"]
+          },
+          "runtimeBins": ["${envPath:SALTS_BASE_ROOT}/bin/salts.dll"]
+        },
+        {
+          "when": { "driver": "llvm-mingw" },
+          "public": {
+            "libs": ["${envPath:SALTS_BASE_ROOT}/lib/libsalts.dll.a", "pthread"]
+          },
+          "runtimeBins": ["${envPath:SALTS_BASE_ROOT}/bin/libsalts.dll"]
+        }
+      ]
+    },
+    "saltsbase_tinytest": {
+      "kind": "prebuilt",
+      "public": {
+        "requiredIncludeDirs": ["${envPath:SALTS_BASE_ROOT}/include"]
+      },
+      "variants": [
+        {
+          "when": { "driver": "msvc" },
+          "public": {
+            "libs": ["${envPath:SALTS_BASE_ROOT}/lib/saltscore_tinytest.lib"]
+          }
+        },
+        {
+          "when": { "driver": "llvm-mingw" },
+          "public": {
+            "libs": ["${envPath:SALTS_BASE_ROOT}/lib/libsaltscore_tinytest.a"]
+          }
+        }
+      ]
+    },
+    "saltsbase_asn1": {
+      "kind": "prebuilt",
+      "public": {
+        "deps": ["saltsbase_simd", "saltsbase_core"],
+        "requiredIncludeDirs": ["${envPath:SALTS_BASE_ROOT}/include"]
+      },
+      "variants": [
+        {
+          "when": { "driver": "msvc" },
+          "public": {
+            "libs": ["${envPath:SALTS_BASE_ROOT}/lib/asn1.lib"]
+          }
+        },
+        {
+          "when": { "driver": "llvm-mingw" },
+          "public": {
+            "libs": ["${envPath:SALTS_BASE_ROOT}/lib/libasn1.a"]
+          }
+        }
+      ]
+    },
+    "saltsbase_simd": {
+      "kind": "prebuilt",
+      "public": {
+        "requiredIncludeDirs": ["${envPath:SALTS_BASE_ROOT}/include"]
+      },
+      "variants": [
+        {
+          "when": { "driver": "msvc" },
+          "public": {
+            "libs": ["${envPath:SALTS_BASE_ROOT}/lib/simd.lib"]
+          }
+        },
+        {
+          "when": { "driver": "llvm-mingw" },
+          "public": {
+            "libs": ["${envPath:SALTS_BASE_ROOT}/lib/libsimd.a"]
+          }
+        }
+      ]
+    },
+    "saltsbase_native_io": {
+      "kind": "prebuilt",
+      "public": {
+        "deps": ["saltsbase_coroutine", "saltsbase_core"],
+        "requiredIncludeDirs": ["${envPath:SALTS_BASE_ROOT}/include"],
+        "libs": ["ws2_32"]
+      },
+      "variants": [
+        {
+          "when": { "driver": "msvc" },
+          "public": {
+            "libs": ["${envPath:SALTS_BASE_ROOT}/lib/native_io.lib"]
+          }
+        },
+        {
+          "when": { "driver": "llvm-mingw" },
+          "public": {
+            "libs": ["${envPath:SALTS_BASE_ROOT}/lib/libnative_io.a"]
+          }
+        }
+      ]
+    },
+    "saltsbase_coroutine": {
+      "kind": "prebuilt",
+      "public": {
+        "deps": ["saltsbase_core"],
+        "requiredIncludeDirs": ["${envPath:SALTS_BASE_ROOT}/include"]
+      },
+      "variants": [
+        {
+          "when": { "driver": "msvc" },
+          "public": {
+            "libs": ["${envPath:SALTS_BASE_ROOT}/lib/coroutine.lib"]
+          }
+        },
+        {
+          "when": { "driver": "llvm-mingw" },
+          "public": {
+            "libs": ["${envPath:SALTS_BASE_ROOT}/lib/libcoroutine.a"]
+          }
+        }
+      ]
+    },
+    "cmeta_cmeta": {
+      "kind": "prebuilt",
+      "public": {
+        "deps": ["saltsbase_core"],
+        "requiredIncludeDirs": ["${envPath:CMETA_ROOT}/include"]
+      },
+      "variants": [
+        {
+          "when": { "driver": "msvc" },
+          "public": {
+            "libs": ["${envPath:CMETA_ROOT}/lib/cmeta_cmeta.lib"]
+          }
+        },
+        {
+          "when": { "driver": "llvm-mingw" },
+          "public": {
+            "libs": ["${envPath:CMETA_ROOT}/lib/libcmeta_cmeta.a"]
+          }
+        }
+      ]
+    },
+    "salts_cnet": {
+      "kind": "prebuilt",
+      "public": {
+        "deps": ["saltsbase_native_io"],
+        "requiredIncludeDirs": ["${envPath:SALTS_CNET_ROOT}/include"]
+      },
+      "runtimeDeps": ["salts_crypto"],
+      "variants": [
+        {
+          "when": { "driver": "msvc" },
+          "public": {
+            "libs": ["${envPath:SALTS_CNET_ROOT}/lib/cnet.lib"]
+          },
+          "runtimeBins": ["${envPath:SALTS_CNET_ROOT}/bin/cnet.dll"]
+        },
+        {
+          "when": { "driver": "llvm-mingw" },
+          "public": {
+            "libs": ["${envPath:SALTS_CNET_ROOT}/lib/libcnet.dll.a"]
+          },
+          "runtimeBins": ["${envPath:SALTS_CNET_ROOT}/bin/cnet.dll"]
+        }
+      ]
+    },
+    "salts_crypto": {
+      "kind": "prebuilt",
+      "public": {
+        "deps": ["saltsbase_asn1"],
+        "requiredIncludeDirs": ["${envPath:SALTS_CNET_ROOT}/include"],
+        "libs": ["bcrypt", "ws2_32", "crypt32"]
+      },
+      "variants": [
+        {
+          "when": { "driver": "msvc" },
+          "public": {
+            "libs": ["${envPath:SALTS_CNET_ROOT}/lib/salts_crypto.lib"]
+          },
+          "runtimeBins": ["${envPath:SALTS_CNET_ROOT}/bin/salts_crypto.dll"]
+        },
+        {
+          "when": { "driver": "llvm-mingw" },
+          "public": {
+            "libs": ["${envPath:SALTS_CNET_ROOT}/lib/libsalts_crypto.dll.a"]
+          },
+          "runtimeBins": ["${envPath:SALTS_CNET_ROOT}/bin/salts_crypto.dll"]
+        }
+      ]
+    }
+  }
+}

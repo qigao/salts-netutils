@@ -1,0 +1,26 @@
+{
+  "forEach": [
+    {
+      "files": ["test_email_smtp.c", "test_email_pop3.c", "test_email_message.c", "test_email_integration.c"],
+      "target": {
+        "kind": "executable",
+        "private": {
+          "deps": ["SaltsEmail", "saltsbase_tinytest"]
+        },
+        "test": {}
+      }
+    }
+  ],
+  "targets": {
+    "test_email_cnet": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_email_cnet.c"]
+      },
+      "private": {
+        "deps": ["SaltsEmail", "saltsbase_tinytest"]
+      },
+      "test": { "timeout": 30 }
+    }
+  }
+}

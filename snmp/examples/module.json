@@ -1,0 +1,13 @@
+{
+  "forEach": [
+    {
+      "files": ["snmp_get_example.c", "snmp_walk_example.c"],
+      "target": {
+        "kind": "executable",
+        "private": {
+          "deps": ["SaltsSNMP"]
+        }
+      }
+    }
+  ]
+}

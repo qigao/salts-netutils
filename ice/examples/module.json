@@ -1,0 +1,26 @@
+{
+  "forEach": [
+    {
+      "files": ["stun_discovery.c", "ice_gather.c", "turn_test.c"],
+      "target": {
+        "kind": "executable",
+        "private": {
+          "deps": ["SaltsICE"]
+        }
+      }
+    }
+  ],
+  "targets": {
+    "stun_service": {
+      "kind": "executable",
+      "sources": {
+        "files": ["stun_service.c", "../src/ice_cnet_datagram.c"]
+      },
+      "private": {
+        "deps": ["SaltsICE", "salts_cnet", "saltsbase_core"],
+        "includeDirs": ["../src"],
+        "libs": ["ws2_32"]
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "forEach": [
+    {
+      "files": ["example_email_send.c", "example_email_receive.c", "example_email_imap.c"],
+      "target": {
+        "kind": "executable",
+        "private": {
+          "deps": ["SaltsEmail"]
+        }
+      }
+    }
+  ]
+}

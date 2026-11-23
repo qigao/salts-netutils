@@ -1,0 +1,6 @@
+{
+  "tools": {
+    "re2c": { "program": "${envPath:SALTSNET_RE2C_ROOT}/bin/re2c${host:exe}" },
+    "lemon": { "program": "${envPath:LEMON_ROOT}/bin/lemon${host:exe}" }
+  }
+}

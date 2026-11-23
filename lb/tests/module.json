@@ -1,0 +1,15 @@
+{
+  "targets": {
+    "test_salts_lb": {
+      "kind": "executable",
+      "sources": {
+        "files": ["test_salts_lb.c"]
+      },
+      "private": {
+        "deps": ["SaltsLB", "saltsbase_core", "saltsbase_tinytest"],
+        "libs": ["ws2_32"]
+      },
+      "test": { "name": "salts_lb" }
+    }
+  }
+}

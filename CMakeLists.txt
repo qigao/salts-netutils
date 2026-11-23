@@ -68,7 +68,7 @@ endif()
 
 include(cmake/SaltsNetDependencies.cmake)
 # Additional components
-add_subdirectory(tools)
+
 include(FindTools)
 
 
