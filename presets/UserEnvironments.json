@@ -13,7 +13,8 @@
         "CMETA_ROOT": "$penv{CMETA_ROOT}",
         "SALTS_CNET_ROOT": "$penv{SALTS_CNET_ROOT}",
         "SALTS_UTILS_ROOT": "$penv{SALTS_UTILS_ROOT}",
-        "RE2C_ROOT": "$penv{RE2C_ROOT}"
+        "RE2C_ROOT": "$penv{RE2C_ROOT}",
+        "LEMON_ROOT": "$penv{LEMON_ROOT}"
       },
       "cacheVariables": {
         "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/${presetName}/stage",

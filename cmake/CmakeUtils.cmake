@@ -131,8 +131,8 @@ function(cmake_add_grammar TARGET_NAME)
     add_custom_command(
       OUTPUT ${GRAMMAR_GEN} ${GRAMMAR_H}
       COMMAND ${CMAKE_COMMAND} -E copy ${ARG_GRAMMAR_Y} ${GRAMMAR_Y_GEN}
-      COMMAND ${LEMON_EXECUTABLE} -T${LEMPAR} ${GRAMMAR_Y_GEN}
-      DEPENDS ${ARG_GRAMMAR_Y} ${LEMON_DEPENDS}
+      COMMAND "${LEMON_EXECUTABLE}" "-T${LEMPAR}" "${GRAMMAR_Y_GEN}"
+      DEPENDS "${ARG_GRAMMAR_Y}" "${LEMON_EXECUTABLE}" "${LEMPAR}"
       COMMENT "Generating ${TARGET_NAME} parser with lemon"
       VERBATIM)
     set(GRAMMAR_TARGET "${TARGET_NAME}_grammar_codegen")

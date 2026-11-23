@@ -1,4 +1,10 @@
-# Slate 构建排障
+# 构建排障
+
+## CMake 的 Lemon 宿主包
+
+`LEMON_ROOT` 取 [Lemon 锁文件](cmake/lemon.lock.json) 对应的 vcpkg-cache 恢复回执中的 `root`。CMake 从这个目录查找 Lemon 和 `share/lemon/lempar.c`。用 `ninja -C build/native-release-user -t query snmp/asn1/parser.c` 可以同时核对语法文件、可执行文件和模板三个输入。Android 的目标 triplet 用于库依赖，Lemon 恢复选择 CI runner 的宿主平台。
+
+在 Windows 上，LLVM-MinGW 和 MSVC 的 Release preset 各通过 37 项 CTest。Android ARM64 和 x64 交叉构建均使用 Windows 宿主 Lemon，安装的共享库通过 16 KiB ELF 对齐检查。缺少 `LEMON_ROOT` 时，CMake 在配置阶段报错。
 
 ## re2c 缓存路径
 

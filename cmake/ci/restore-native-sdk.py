@@ -121,16 +121,22 @@ def main():
 
     lock = destination / "re2c.lock.json"
     lock.write_text(json.dumps(RE2C), encoding="utf-8")
-    executable = "bin/re2c.exe" if args.host.startswith("windows-") else "bin/re2c"
+    tool_suffix = ".exe" if args.host.startswith("windows-") else ""
     re2c = capture(*RESTORE, "locked", str(lock), "--destination", str(destination / "re2c"),
-                   "--payload", f"tools/{args.host}", "--executable", executable)
+                   "--payload", f"tools/{args.host}", "--executable", f"bin/re2c{tool_suffix}")
     environment["RE2C_ROOT"] = re2c["root"]
+    lemon = capture(*RESTORE, "locked", str(SOURCE / "cmake" / "lemon.lock.json"),
+                    "--destination", str(destination / "lemon"), "--payload", f"tools/{args.host}",
+                    "--require", "share/lemon/lempar.c", "--require", "share/lemon/source.json",
+                    "--executable", f"bin/lemon{tool_suffix}")
+    environment["LEMON_ROOT"] = lemon["root"]
 
     provenance = destination / "inputs.json"
     provenance.write_text(json.dumps({
         "sdks": versions,
         "vcpkg_cache": {"version": environment["VCPKG_CACHE_VERSION"], "sha256": cache["sha256"]},
         "re2c": {"version": RE2C["source"]["version"], "sha256": re2c["sha256"]},
+        "lemon": {"version": lemon["source"]["version"], "sha256": lemon["sha256"]},
     }, indent=2), encoding="utf-8")
     environment["SALTSNET_INPUTS"] = provenance.as_posix()
     with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as output:

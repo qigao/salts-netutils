@@ -38,7 +38,6 @@ jobs:
       cnet_preset: ${{ matrix.cnet_preset }}
 
   android:
-    needs: native
     strategy:
       fail-fast: false
       matrix:

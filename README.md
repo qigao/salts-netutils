@@ -525,10 +525,12 @@ prefix. Its CMake package exposes `SaltsCNet_LEGACY_SNMP_CRYPTO`.
 The `native-release-user` preset uses LLVM-MinGW and the preinstalled
 `qigao-x64-windows-llvm-mingw` payload. The `msvc-release-user` preset uses
 MSVC and the `x64-windows` payload in an x64 `VsDevCmd.bat` environment.
-Select matching SDK roots in `.env` for each compiler. Set `RE2C_ROOT` to the
-host payload root reported by the vcpkg-cache restore of `Qigao.Re2c.Binary`.
-On Windows this directory contains `bin/re2c.exe`. CMake 3.27 or newer reads
-the dependency paths from the parent environment.
+Select matching SDK roots in `.env` for each compiler. Set `RE2C_ROOT` and
+`LEMON_ROOT` to the host payload roots reported by the vcpkg-cache restores
+of `Qigao.Re2c.Binary` and `Qigao.Lemon.Binary`. CMake 3.27 or newer reads
+those paths from the parent environment. The ASN.1 parser uses Lemon and
+`share/lemon/lempar.c` from the same payload. An Android cross build uses
+the payload for the machine running CMake.
 
 Load `.env` from PowerShell and run the LLVM-MinGW presets:
 
@@ -570,7 +572,8 @@ names and C entry points. Rebuild clients together with the selected SDKs
 because public headers and binary imports use the split providers. To roll
 back, rebuild the previous SaltsNet revision against its matching SDKs.
 
-Android device testing and LLDB notes are documented in [tools/android-test.md](tools/android-test.md).
+The [Android CI profiles](.github/workflows/native-sdk-release.yml) restore
+Lemon for the Linux host and verify ELF segment alignment after installation.
 
 ## Build with Slate
 
@@ -681,4 +684,17 @@ For local CLI restore, check out the exact pinned `qigao/vcpkg-cache` commit int
 `build/vcpkg-cache-contract`, install Python 3.12 and `curl`, provide
 `GITHUB_TOKEN` with `read:packages`, and establish the platform-specific
 `RE2C_ROOT` and `RE2C_PACKAGE_VERSION` from its curl-based re2c setup.
-CI performs all of these steps from the immutable shared action SHA.
+For Lemon, use the same restore command as CI with the
+[`cmake/lemon.lock.json`](cmake/lemon.lock.json) package pin. For example,
+restore the Windows x64 host payload from PowerShell.
+
+```powershell
+python "$env:VCPKG_CACHE_REPOSITORY_ROOT/scripts/restore-native-dependency.py" locked `
+  cmake/lemon.lock.json --destination build/upstream/lemon-windows-x64-1.0.0 `
+  --payload tools/windows-x64 --require share/lemon/lempar.c `
+  --require share/lemon/source.json --executable bin/lemon.exe
+```
+
+Set `LEMON_ROOT` to the `root` from the restore receipt. The native SDK
+workflow restores the pinned package for each runner and records its version
+and digest in the installed SDK manifest.

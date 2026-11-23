@@ -75,7 +75,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Restore pinned SDKs and lexer generator
+      - name: Restore pinned SDKs and host generators
         env:
           GH_TOKEN: ${{ github.token }}
           SDK_HOST: ${{ inputs.host }}
@@ -103,12 +103,6 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends clang ninja-build
-
-      - uses: actions/download-artifact@v4
-        if: inputs.android_abi != ''
-        with:
-          name: linux-x64-lemon
-          path: build/host-tools
 
       - name: Build pinned CNet SDK and qualify SaltsNet
         env:
@@ -148,8 +142,7 @@ jobs:
           $cross = -not [string]::IsNullOrWhiteSpace($env:SALTSCORE_ANDROID_ABI)
           $options = @('--preset', $env:SDK_PRESET)
           if ($cross) {
-            tar xf build/host-tools/lemon.tar -C build/host-tools
-            $options += @('-DBUILD_TESTING=OFF', "-DLEMON_EXECUTABLE=$root/build/host-tools/lemon")
+            $options += '-DBUILD_TESTING=OFF'
           } else {
             $options += '-DBUILD_TESTING=ON'
           }
@@ -197,20 +190,10 @@ jobs:
           } | ConvertTo-Json -Depth 6 | Set-Content "$stage/saltsnet-sdk-manifest.json" -Encoding utf8
           New-Item -ItemType Directory -Path $archiveDirectory | Out-Null
           tar cf "$archiveDirectory/salts-netutils-$version-$env:SDK_PROFILE.tar" -C $stage .
-          if ($env:SDK_PROFILE -eq 'linux-clang-x64') {
-            tar cf "$archiveDirectory/lemon.tar" -C "$root/build/$env:SDK_PRESET/bin" lemon
-          }
 
       - uses: actions/upload-artifact@v4
         with:
           name: salts-netutils-sdk-${{ inputs.profile }}
           path: build/archives/salts-netutils-*.tar
           compression-level: 0
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v4
-        if: inputs.profile == 'linux-clang-x64'
-        with:
-          name: linux-x64-lemon
-          path: build/archives/lemon.tar
           if-no-files-found: error

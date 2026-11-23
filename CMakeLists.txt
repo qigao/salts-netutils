@@ -67,10 +67,7 @@ if(NOT CMAKE_TOOLCHAIN_FILE AND VCPKG_INSTALLED_DIR AND VCPKG_TARGET_TRIPLET)
 endif()
 
 include(cmake/SaltsNetDependencies.cmake)
-# Additional components
-
 include(FindTools)
-
 
 add_subdirectory(ice)
 add_subdirectory(snmp)
